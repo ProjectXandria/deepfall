@@ -131,9 +131,10 @@ Per-wave reports: `loop/phases/w*/REPORT.md`. Digests: `loop/DIGEST-2026-11-13.m
   Export rc=0, 0 errors. Uploaded 2026-11-15 ~15:41 PST on Skit's tap:
   https://muse.ai/files/1409033565616215/4771379009816934/dbz6mtwyyzttltxu21s28lxd/deepfall-v1.3-debug.apk
   — link expires Mon Nov 17 ~15:33 PST.
-- GitHub still at `103f450a` (Phase 13) — push is Skit's call, as is the Game Off entry pick
-  (DEEPFALL vs Shiftworlds, deadline Dec 1, 2026 13:37 PST). Orb scale settled
-  at 2.0 (chunk 3 merge, 2026-11-15).
+- GitHub now at `529b928a` (v1.3, pushed 2026-11-15 ~16:03 PST on Skit's tap; parent
+  `103f450a` Phase 13) — chunks 1+2+3 merged + chunk 8 in, 2,275 files, APKs kept
+  out of the repo. Game Off entry pick still his (DEEPFALL vs Shiftworlds,
+  deadline Dec 1, 2026 13:37 PST). Orb scale settled at 2.0 (chunk 3 merge, 2026-11-15).
 - NOTE on the rename (2026-11-15): `config/name` is now "DEEPFALL", so the
   Android user-data folder moves from `DEEPFALL Phase 1` to `DEEPFALL`.
   Saves from the v1.2 APK will NOT carry over to the renamed build; the

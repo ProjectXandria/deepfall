@@ -187,6 +187,19 @@ var _plx_mid: Sprite2D = null
 var _fg_frames: Array = []
 var _fg_frame_base_cam := Vector2.ZERO
 var _fg_frames_built := false
+# Graphics Push 1 (GP1 depth tint): Ambient CanvasModulate colour
+# lerped by player depth, 8 bands over cell y 0..89. Shallow
+# (0.45,0.52,0.68) -> deep (0.30,0.36,0.52): cooler/darker, never
+# black. Colour is written only when the band changes.
+const GP_DEPTH_SHALLOW := Color(0.45, 0.52, 0.68, 1.0)
+const GP_DEPTH_DEEP := Color(0.30, 0.36, 0.52, 1.0)
+var _gp_ambient_band := -1
+var _gp_ambient: CanvasModulate = null
+# Graphics Push 1 (GP2 vignette): radial-gradient TextureRect in the
+# Foreground CanvasLayer (layer 2, below HUD layer 3), generated once
+# in code — no new asset file.
+var _gp_vignette: TextureRect = null
+var _gp_vignette_built := false
 # Phase 9: second HUD label (hint line, font 14) so line 1 and the hint
 # line are measured and fitted independently at 1280x720.
 var _hud2: Label = null
@@ -405,6 +418,7 @@ func _ready() -> void:
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = 5.0
 	_render_background()
+	_build_gp_vignette()
 	_w4_prof_mark("ready_background")
 	var exit_cell: Vector2i = data["exit"]
 	var beacon := ColorRect.new()
@@ -2239,11 +2253,44 @@ func _update_parallax() -> void:
 		for f in _fg_frames:
 			(f["node"] as Polygon2D).position = drift
 
-# Chunk 4: foreground framing shapes (VISUAL-SPEC §5.4). Two
-# top-corner rock overhangs, screen-space Polygon2Ds in the scene's
-# Foreground CanvasLayer (layer 2, above the world, below nothing
-# that matters — HUD text is layer 1 and the shapes sit in the
-# corners). Base rects are viewport rects (1280x720); the 1.2x drift
+# GP2: vignette — radial gradient generated once in code (320x180,
+# centre alpha 0, corners ~0.38, colour 0.03,0.05,0.10), as a
+# full-screen TextureRect child of Foreground (layer 2, below HUD
+# layer 3). mouse_filter ignore so it never eats clicks.
+func _build_gp_vignette() -> void:
+	if _gp_vignette_built:
+		return
+	_gp_vignette_built = true
+	var fg_layer: CanvasLayer = get_node_or_null("Foreground")
+	if fg_layer == null:
+		return
+	var w := 320
+	var h := 180
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var cx := float(w) * 0.5
+	var cy := float(h) * 0.5
+	var max_d := Vector2(cx, cy).length()
+	for y in range(h):
+		for x in range(w):
+			var d := Vector2(float(x) + 0.5 - cx, float(y) + 0.5 - cy).length() / max_d
+			var a := 0.38 * pow(clampf(d, 0.0, 1.0), 2.2)
+			img.set_pixel(x, y, Color(0.03, 0.05, 0.10, a))
+	var tex := ImageTexture.create_from_image(img)
+	var rect := TextureRect.new()
+	rect.name = "GPVignette"
+	rect.texture = tex
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.position = Vector2.ZERO
+	rect.size = Vector2(1280, 720)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fg_layer.add_child(rect)
+	_gp_vignette = rect
+
+# Chunk 4: foreground framing shapes (VISUAL-SPEC §5.4). Three
+# top rock overhangs (two corners + GP1 top-centre stalactite),
+# screen-space Polygon2Ds in the scene's Foreground CanvasLayer
+# (layer 2, above the world, below nothing that matters — HUD text
+# is layer 3 and the shapes sit at the top of the screen). Base rects
 # is applied as a node offset in _update_parallax(). Colour is the
 # dark rock silhouette of the old bottom wedges (0.05, 0.08, 0.13).
 # Built once — _render_background runs once per launch, and a world
@@ -2259,6 +2306,7 @@ func _build_foreground_framing() -> void:
 	var defs := [
 		{"name": "FrameTL", "pts": PackedVector2Array([Vector2(0, 0), Vector2(300, 0), Vector2(220, 64), Vector2(110, 108), Vector2(0, 92)])},
 		{"name": "FrameTR", "pts": PackedVector2Array([Vector2(1280, 0), Vector2(980, 0), Vector2(1060, 64), Vector2(1170, 108), Vector2(1280, 92)])},
+		{"name": "FrameTC", "pts": PackedVector2Array([Vector2(560, 0), Vector2(720, 0), Vector2(690, 48), Vector2(640, 78), Vector2(590, 48)])},
 	]
 	for d in defs:
 		var poly := Polygon2D.new()
@@ -3251,6 +3299,15 @@ func _process(delta: float) -> void:
 			_apply_chunk_visibility()
 			save_game("chunk")
 	var depth: int = max(0, pc.y)
+	# GP1: depth tint — 8 bands over cell y 0..89 (H=90). Band changes
+	# only; HUD (CanvasLayer 3) is a separate canvas, unaffected.
+	var gp_band := clampi(int(depth * 8 / 90), 0, 7)
+	if gp_band != _gp_ambient_band:
+		_gp_ambient_band = gp_band
+		if _gp_ambient == null:
+			_gp_ambient = get_node_or_null("Ambient") as CanvasModulate
+		if _gp_ambient != null:
+			_gp_ambient.color = GP_DEPTH_SHALLOW.lerp(GP_DEPTH_DEEP, float(gp_band) / 7.0)
 	if not _selecting and not _card_open:
 		_run_time += delta
 		_max_depth = maxi(_max_depth, depth)
@@ -4414,17 +4471,18 @@ func _run_selftest_phase4() -> void:
 		_crystal_cells.size(), budget, veins.size(), used_veins.size(), rule_bad, dupes])
 	if _crystal_cells.size() > budget or used_veins.size() != _crystal_cells.size() or rule_bad != 0 or dupes != 0:
 		ok = false
-	# (c) Foreground framing: two shapes, both visible with the player
-	# centred; hiding works when gameplay enters a shape's rect.
-	print("DEEPFALL_SELFTEST_PHASE4 framing shapes=%d (expect 2)" % _fg_frames.size())
-	if _fg_frames.size() != 2:
+	# (c) Foreground framing: three shapes (GP1 adds top-centre
+	# FrameTC), all visible with the player centred; hiding works
+	# when gameplay enters a shape's rect.
+	print("DEEPFALL_SELFTEST_PHASE4 framing shapes=%d (expect 3)" % _fg_frames.size())
+	if _fg_frames.size() != 3:
 		ok = false
 	else:
 		var vis0: Array = []
 		for f in _fg_frames:
 			vis0.append((f["node"] as Polygon2D).visible)
-		print("DEEPFALL_SELFTEST_PHASE4 framing visible_at_rest=%s (expect [true, true])" % str(vis0))
-		if vis0 != [true, true]:
+		print("DEEPFALL_SELFTEST_PHASE4 framing visible_at_rest=%s (expect [true, true, true])" % str(vis0))
+		if vis0 != [true, true, true]:
 			ok = false
 		# Put a frozen bat at the centre of the TL shape's current
 		# screen rect (rect + drift read off the node itself, so the
@@ -4443,8 +4501,9 @@ func _run_selftest_phase4() -> void:
 		await get_tree().process_frame
 		var hid0: bool = _fg_frames[0]["hidden"] == true
 		var hid1: bool = _fg_frames[1]["hidden"] == true
-		print("DEEPFALL_SELFTEST_PHASE4 framing clearance enemy_in_TL tl_hidden=%s tr_hidden=%s (expect true, false)" % [str(hid0), str(hid1)])
-		if not hid0 or hid1:
+		var hid2: bool = _fg_frames[2]["hidden"] == true
+		print("DEEPFALL_SELFTEST_PHASE4 framing clearance enemy_in_TL tl_hidden=%s tr_hidden=%s tc_hidden=%s (expect true, false, false)" % [str(hid0), str(hid1), str(hid2)])
+		if not hid0 or hid1 or hid2:
 			ok = false
 		enemies.erase(bat)
 		bat.queue_free()
@@ -4453,8 +4512,8 @@ func _run_selftest_phase4() -> void:
 		var vis1: Array = []
 		for f in _fg_frames:
 			vis1.append((f["node"] as Polygon2D).visible)
-		print("DEEPFALL_SELFTEST_PHASE4 framing visible_after_clear=%s (expect [true, true])" % str(vis1))
-		if vis1 != [true, true]:
+		print("DEEPFALL_SELFTEST_PHASE4 framing visible_after_clear=%s (expect [true, true, true])" % str(vis1))
+		if vis1 != [true, true, true]:
 			ok = false
 	# (d) Torch-pool profile: sample the shared light-gradient texture
 	# alpha along the centre row at 0..7 tiles from the centre. The
@@ -4500,6 +4559,16 @@ func _run_selftest_phase4() -> void:
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		lights, parts, layers_vis])
+	# GP1: graphics push 1 — ambient band (set by _process depth
+	# tint), vignette present, dust mote count (fx), fg frames = 3.
+	var gp_vig := _gp_vignette != null and is_instance_valid(_gp_vignette)
+	var gp_motes := 0
+	if fx != null and fx.has_method("gp_mote_count"):
+		gp_motes = int(fx.call("gp_mote_count"))
+	print("DEEPFALL_SELFTEST_GRAPHICS_PUSH_1 ambient_band=%d vignette=%s motes=%d fg_frames=%d (expect band>=0, vignette true, motes 28, fg_frames 3)" % [
+		_gp_ambient_band, str(gp_vig), gp_motes, _fg_frames.size()])
+	if _gp_ambient_band < 0 or not gp_vig or gp_motes != 28 or _fg_frames.size() != 3:
+		ok = false
 	print("DEEPFALL_SELFTEST_PHASE4 done PASS=%s" % str(ok))
 	if not ok:
 		print("DEEPFALL_SELFTEST_PHASE4 FAIL")

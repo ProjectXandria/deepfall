@@ -22,6 +22,29 @@ var _last_play: Dictionary = {}
 var music := 0.6
 var _amb: Dictionary = {}
 var _depth_s := 0.0
+# Graphics Push 1 (GP3): ambient dust motes + crystal sparkle, 0 new
+# nodes, 0 new lights, still 1 _draw call. 28 deterministic motes
+# (RNG seed 20261101), slow drift, wrapped around the camera view.
+const GP_MOTE_COUNT := 28
+var _gp_motes: Array = []
+var _gp_time := 0.0
+
+func gp_mote_count() -> int:
+	return _gp_motes.size()
+
+func _gp_init_motes() -> void:
+	if not _gp_motes.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261101
+	for i in range(GP_MOTE_COUNT):
+		_gp_motes.append({
+			"o": Vector2(rng.randf_range(0.0, 1280.0), rng.randf_range(0.0, 720.0)),
+			"v": Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-6.0, 2.0)),
+			"s": rng.randf_range(2.0, 4.0),
+			"a": rng.randf_range(0.12, 0.25),
+			"ph": rng.randf_range(0.0, TAU),
+		})
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -48,6 +71,7 @@ func _ready() -> void:
 		var ap := AudioStreamPlayer.new()
 		add_child(ap)
 		_players.append(ap)
+	_gp_init_motes()
 
 func sfx(name: String, pitch_var := 0.08, vol_db := 0.0) -> void:
 	if volume <= 0.01 or not _streams.has(name):
@@ -120,6 +144,14 @@ func _process(delta: float) -> void:
 	var rd: float = delta / maxf(0.01, Engine.time_scale)
 	_shake = maxf(0.0, _shake - rd * 40.0)
 	shake_vec = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake
+	# GP3: dust motes drift slowly, wrapped around the 1280x720 camera
+	# view (offsets are view-relative; world pos is derived in _draw).
+	_gp_time += delta
+	for m in _gp_motes:
+		var o: Vector2 = m["o"] + (m["v"] as Vector2) * delta
+		o.x = fposmod(o.x, 1280.0)
+		o.y = fposmod(o.y, 720.0)
+		m["o"] = o
 	var fg: Array = main_node.fg if main_node != null else []
 	for p in _parts:
 		p["t"] = float(p["t"]) + delta
@@ -160,6 +192,29 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	# GP3: dust motes (view-relative offsets wrapped in _process) and
+	# crystal sparkle — same single _draw call as the particles.
+	var cam: Node = main_node.get("camera") if main_node != null else null
+	var cc := Vector2(640, 360)
+	if cam != null and cam.has_method("get_screen_center_position"):
+		cc = cam.get_screen_center_position()
+	var origin: Vector2 = cc - Vector2(640, 360)
+	for m in _gp_motes:
+		var tw := 0.75 + 0.25 * sin(_gp_time * 1.3 + float(m["ph"]))
+		var mp: Vector2 = origin + (m["o"] as Vector2)
+		draw_circle(mp, float(m["s"]), Color(0.85, 0.9, 1.0, float(m["a"]) * tw))
+	if main_node != null and main_node.get("_crystal_cells") != null:
+		var cells: Array = main_node.get("_crystal_cells")
+		for c in cells:
+			var wp := Vector2((int(c.x) + 0.5) * 64.0, (int(c.y) + 0.5) * 64.0)
+			if wp.distance_to(cc) > 900.0:
+				continue
+			var k := 0.5 + 0.5 * sin(_gp_time * 2.0 + float(int(c.x) * 7 + int(c.y) * 13))
+			var sa := 0.3 + 0.4 * k
+			var sl := 6.0 + 4.0 * k
+			var scol := Color(0.5, 0.95, 1.0, sa)
+			draw_line(wp + Vector2(-sl, 0), wp + Vector2(sl, 0), scol, 2.0)
+			draw_line(wp + Vector2(0, -sl), wp + Vector2(0, sl), scol, 2.0)
 	for p in _parts:
 		var k: float = 1.0 - float(p["t"]) / float(p["life"])
 		var s: float = maxf(2.0, float(p["s"]) * (0.5 + 0.5 * k))
