@@ -32,7 +32,7 @@ func setup(slug: String, p_main: Node, facing: int, p_vel: Vector2, p_half_h: fl
 	z_index = 2
 
 func _solid(cx: int, cy: int) -> bool:
-	if main_node == null or cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if main_node == null or cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = main_node.fg[cy][cx]
 	return t != 0

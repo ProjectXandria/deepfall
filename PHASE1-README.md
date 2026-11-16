@@ -3,6 +3,12 @@
 First playable slice, NOT the full game and NOT the chunk-streamed world.
 Architecture is a single seeded region now; chunk streaming is a later phase.
 
+> Current state (2026-11-14): this log now runs through Phase 14b, the hard
+> beta, and improvement-loop waves W1–W9 — see the appendix at the end.
+> Live tree: 200×90 random maps (40 rooms), 3 classes, 7 enemy kinds,
+> v1.2 APK. GitHub is still at Phase 13 (103f450a); everything after is
+> local only.
+
 ## What runs (verified)
 
 - Godot 4.8 beta 1 project, opens and runs headless without script errors.
@@ -1442,3 +1448,128 @@ limits.
 - The rim glow is subtle by design (1.07×, warm, semi-transparent);
   if the soldier still blends in on the phone, it needs a stronger
   outline pass, not more glow.
+
+## Appendix — Phases 11–14, hard beta, and the improvement loop (2026-11-05 → 2026-11-14)
+
+### Phases 11–13 (Emergent build, pushed to GitHub 2026-11-05, commit `103f450a`)
+
+- P11: floating twin sticks, multi-touch buttons, 360° aimed mining/sword,
+  real knockback, dash, ground slam, pushable props, breakable pots,
+  procedural paper-doll hero rig (`scripts/hero_rig.gd` — NOT sprite
+  frames).
+- P12: pixel enemy redraws, Controls & Feel settings, 12 procedural SFX,
+  haptics.
+- P13: death animations, physical loot drops, prop persistence in save,
+  YOU FELL run card, cave ambience.
+- Full detail: `README.md` (Phases 11–13 sections). GitHub
+  https://github.com/joshoshfield-a11y/deepfall, main @ `103f450a` — the
+  last push; everything after is local only.
+
+### Phase 14 — Skit's first real-phone playtest fixes (2026-11-06)
+
+His playtest was on the **Phase 10 build** (screenshot fingerprint: the HUD
+line `…Click mine | Touch: sticks, TORCH, ATK, JUMP, TOOL` exists only in
+Phase 10) — all three complaints matched Phase 10 exactly. Fixed as asked
+anyway:
+
+- **JUMP:** variable jump height made a quick tap a ~34 px hop that read as
+  a dead button. Fix: `jump_btn_full` — JUMP-button taps give a full jump;
+  stick-flick jumps keep variable height. Verified: real_touch_jump
+  rose=110.7 at phone geometry (screen scale 1.50).
+- **Maps:** 80×45 / 14 rooms → **200×90 / 40 rooms**, fresh random seed
+  every run (8-digit), same structured room+corridor algorithm +
+  flood-fill validation. Floor guard: SOLID under the spawn/exit anchor
+  ±1, one-way PLATFORM over other holes in the floor row.
+  SAVE_VERSION 8→9 (v8 saves ignored by design).
+- **Startup lag:** loading screen ("DIGGING THE MINES…") + staged rebuild
+  yielding between phases; `load_ms` printed on READY.
+- Anchor, unchanged through every wave since:
+  `DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true`.
+
+### Phase 14b — hint rings out + version bump (2026-11-06)
+
+- Fixed hint rings removed from `touch_ui.gd` `_draw_sticks` (sticks float
+  to the thumb, no rings). `version/code` 1→2, `version/name` 1.0→1.1.
+  APK v1.1: 94,725,129 B, sha256 `c2ada4e0…7e7f39f`, preserved as
+  `exports/deepfall-v1.1-backup.apk`. Its link expired 2026-11-08.
+
+### Hard beta test (2026-11-08, all green)
+
+- `--selftest` (Phases 6–10), `--selftest-p11` (P11–14),
+  `--selftest-load`: all PASS, rc=0, 0 SCRIPT ERRORs. Report:
+  `BETA-REPORT.md`. Class variants: tech sword 50→35, red 50→30 (HP 120),
+  mage orb 50→38 (orb damage proven by the Phase 8 test; instant reads
+  replaced by an orb-wait in W1).
+- `_share_card` headless guard fix (2026-11-08): selftests run under xvfb
+  with NO `--headless` for phone-geometry proof; export stays
+  `--headless`.
+- 180 s soak: 0 deaths, 2 kills, 10 stuck events (bot walks straight
+  lines, never mines up — a bot limit, not a game bug).
+
+### Improvement loop W1–W9 (2026-11-12 → 2026-11-14, refine-only, local only)
+
+Per-wave reports: `loop/phases/w*/REPORT.md`. Digests:
+`loop/DIGEST-2026-11-13.md` (W1–W5), `loop/DIGEST-2026-11-14.md` (W1–W7).
+
+- **W1** — mage P11 orb-wait + soak mine-upward escape (test-only).
+  Soak stuck 10→6, rooms 1→3. Climb-out NOT achieved — handed to W3.
+- **W2** — deep-cave +1 foe in rooms with top row > 60. Seed 20261101:
+  foes=0 time 146→105 s, worst empty stretch 130→21 s, kills 2→3.
+- **W3** — climb-out ledges: stepped one-way platforms in every corridor
+  shaft (46 legs / 944 cells on seed 20261101, no rng). Climb probe PASS
+  10 rows on 3 seeds; soak climb 36 rows (live) vs 0 before. Regression
+  caught in-wave: ledges vs chamber lights (Phase 7/10 `PASS=false`
+  hidden by rc=0) — gates now fail on any `PASS=false`.
+- **W4** — startup merge (layers+edges one pass; load_ms 1737–2231 →
+  1009–1513 sandbox; world byte-identical by `--dump-layers` diff).
+- **W5** — animation gaps, PROC only: ore-mimic attack 4/4, tunnel-worm
+  walk 3/3, red/mage fall/land verified reuse. No new sprite generation;
+  Skit's hand-drawn homework untouched.
+- **W6** — long soak 600 s × 3 seeds + 180 s red/mage, 0 deaths. Found +
+  fixed a map-gen bug: seed 91838678 built 39/40 rooms connected=false
+  (repair-leg fix in `map_gen.gd`, tripwire `DEEPFALL_W6_UNREACHED`
+  kept). 6 seeds verified 40/40 connected=true.
+- **W7** — final verify 6/6 green + APK rebuilt v1.2/code 3.
+- **W8** — `--selftest-p11` no-class stall: does NOT reproduce (8/8 pass;
+  likely sandbox contention that night). Found + fixed a real harness bug:
+  stale run-card state let 12 checks read 0 while the process still
+  exited 0; fix clears card state at suite entry (`main.gd`,
+  test-scoped).
+- **W9** — general fix (this wave): `_rebuild_world` now clears
+  `_card_pending` / `_card_reason` / `_card_open` / `_respawn_timer` /
+  `player.dead` at entry, for every caller. FAIL-pre 3-arm probe →
+  PASS-post; death→card→respawn→extract regression green; subsumption
+  proven (the W8 F2 repro passes with the suite-entry clear removed —
+  the clear is KEPT as defense in depth). Docs refresh (this appendix).
+
+### KayKit additions (2026-11-13, another thread, CC0, local only)
+
+- **Skeleton Warrior, 7th enemy** (KayKit Skeletons GLB baked to 2D in
+  Blender headless; walk 4 / attack 4 / death 6 / idle 1 in
+  `assets/enemies_px/skeleton-warrior/`; hp 25, speed 80, dmg 8,
+  aggro 280). **Chest prop** (KayKit Dungeon; 1 hit, drops gold/torch).
+  Five more prop sprites staged in `assets/hero/props/` (barrel, candle,
+  banner, column, coins) — textures only, not wired. In-game sighting of
+  warrior spawn/kill and chest break still UNVERIFIED (gates prove the
+  assets load).
+- APK v1.2 (code 3): `exports/deepfall-phase1-debug.apk`, **95,793,409 B**,
+  sha256 `dc8b73958957232b6005311e49e7a36bb43f28f2cd7b78c24d41280c7cdc1ea0`,
+  apksigner PASS, uploaded 2026-11-13 ~22:54 PST on Skit's tap; link
+  expires Sun Nov 15 ~23:13 PST. Previous KayKit v1.2 build preserved as
+  `exports/deepfall-v1.2-kaykit-backup.apk` (95,772,929 B, sha
+  `8a3b8f2c…92b71`).
+
+### Honest limits (updated 2026-11-14)
+
+- Sandbox fps 1–7 (llvmpipe) is not phone fps; `load_ms` are sandbox
+  numbers, not phone numbers.
+- Selftests prove mechanics, not feel. Still needs Skit's phone verdicts:
+  v1.2 install/art, skeleton-warrior sighting, deep-cave density,
+  climb-out comfort, startup feel.
+- Still his calls: Effekseer orb scale 1.0 vs 2.0, GitHub push (still
+  `103f450a`), Game Off entry pick (DEEPFALL vs Shiftworlds; deadline
+  Dec 1, 2026 13:37 PST).
+- Mage orb: a perfectly horizontal orb sails 4 px over a floor-level
+  pot's hit rect (W1 observation, unchanged).
+- Phase 6 `a3` (`chunk_visible` on the return leg) is a pre-existing
+  timing flake at sandbox fps, not a map/geometry finding.

@@ -40,7 +40,21 @@
       "dying": 6,
       "crouch": 4,
       "climb": 0,
-      "swim": 0
+      "swim": 4
+    },
+    "skeleton": {
+      "idle": 9,
+      "walk": 9,
+      "shoot": 5,
+      "reload": 4,
+      "thruster": 7,
+      "dying": 3,
+      "walkcycle": 4,
+      "melee": 4,
+      "crouch": 4,
+      "climb": 4,
+      "swim": 4,
+      "fall": 0
     }
   },
   "excluded": {
@@ -57,6 +71,7 @@
     "No fall/land frames exist for red or mage; code reuses thruster frame 0 for airborne and the lowest crouch frame for landing (real frames of that character, not generated). Distinct fall/land poses are still missing.",
     "Climb frames have ladders baked in (same caveat as the tech climb set); no climb state exists in-game yet, so the sets are staged in the game tree but not driven.",
     "Mage swim is upright/wading (never goes horizontal); used as-is. Red/mage walk cycles read as 2-pose alternations; used as-is.",
-    "Phase 9: tech dying (r4c3..c8, 6) + thruster (r3c0..c5, 6) + crouch (multiframe/crouch clean PNGs, 4) sliced into the flat player_anim root. Tech reload (r2c5..c8, 4) exists staged but is NOT sliced: no reload mechanic exists in-game, so reload stays loaded-but-untriggered for red/mage and absent for tech. Tech climb/swim still absent (no ladder or water state in-game; climb frames have ladders baked in)."
+    "Phase 9: tech dying (r4c3..c8, 6) + thruster (r3c0..c5, 6) + crouch (multiframe/crouch clean PNGs, 4) sliced into the flat player_anim root. Tech reload (r2c5..c8, 4) exists staged but is NOT sliced: no reload mechanic exists in-game, so reload stays loaded-but-untriggered for red/mage and absent for tech. Tech climb/swim still absent (no ladder or water state in-game; climb frames have ladders baked in).",
+    "Chunk 3: tech swim wired (4, was 0) from multiframe/tech-swim-v2; skeleton hero added as an unlockable (never a starting class). Skeleton walkcycle samples the 9-frame walk strip at stride 2 (no sliced walk-cycle set exists; skeleton-walk-v2 is reference-only). No fall frames exist for the skeleton (same reuse rule as red/mage). Climb frames have ladders baked in; no climb/swim state in-game yet."
   ]
 }

@@ -1,0 +1,146 @@
+Godot Engine v4.8.beta1.official.4d10419ca - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 20.1.2, 256 bits)
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+ALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory
+ALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default
+ERROR: Condition "status < 0" is true. Returning: ERR_CANT_OPEN
+   at: init_output_device (drivers/alsa/audio_driver_alsa.cpp:97)
+WARNING: All audio drivers failed, falling back to the dummy driver.
+     at: initialize (servers/audio/audio_driver.cpp:244)
+
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1602)
+     GDScript backtrace (most recent call first):
+         [0] _layout (res://scripts/touch_ui.gd:242)
+         [1] _ready (res://scripts/touch_ui.gd:168)
+DEEPFALL_SAVE_IGNORED version/seed mismatch
+DEEPFALL_W2_SPAWNS chosen=[5, 4, 25, 8, 6, 2, 7, 38, 13, 16, 26, 23] top_rows=[17, 30, 42, 73, 57, 63, 47, 48, 74, 52, 6, 54]
+DEEPFALL_ENEMY_SPAWNS total=24
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=61 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 1) loaded=6/78
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_PHASE1_READY seed=20261102 rooms=40/40 ore_veins=93 spawn=(10, 16) exit=(189, 41) connected=true load_ms=3065
+DEEPFALL_CLASS_SELECT_SHOWN
+DEEPFALL_W2_SPAWNS chosen=[5, 4, 25, 8, 6, 2, 7, 38, 13, 16, 26, 23] top_rows=[17, 30, 42, 73, 57, 63, 47, 48, 74, 52, 6, 54]
+DEEPFALL_ENEMY_SPAWNS total=24
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=61 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 1) loaded=6/78
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_LOG Tool: Pickaxe
+SOAK_ROOM t=0 room=0 pos=(11, 16)
+DEEPFALL_CHUNK stream=(1, 1) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_ROOM t=2 room=1 pos=(19, 23)
+DEEPFALL_CHUNK stream=(0, 1) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(1, 1) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(1, 2) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(1, 3) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=10 pos=(19, 49) hp=100 foes=8 fps=7 kills=0 mined=0
+DEEPFALL_CHUNK stream=(1, 4) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOG Tool: Sword
+SOAK_ROOM t=11 room=2 pos=(18, 68)
+DEEPFALL_DROP slug=cave-spider item=stone n=1
+DEEPFALL_ENEMY_SLAIN slug=cave-spider remaining=23
+DEEPFALL_LOG Slain cave-spider
+DEEPFALL_SAVE_SAVED reason=kill mined=0 cracked=0 torches=0 slain=1 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_CHUNK stream=(0, 4) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=1 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOG Smashed a barrel: +1 Wood, +1 Coal
+DEEPFALL_PROP_BROKEN kind=barrel loot=+1 Wood, +1 Coal
+DEEPFALL_SAVE_SAVED reason=prop mined=0 cracked=0 torches=0 slain=1 ore=0 inv={ "wood": 1, "stone": 0, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOOT_COLLECTED item=stone n=1 total=1
+DEEPFALL_CHUNK stream=(1, 4) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(0, 4) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=0 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_TORCH_PLACED cell=(16, 71) held=2
+DEEPFALL_LOG Placed torch
+DEEPFALL_SAVE_SAVED reason=torch mined=0 cracked=0 torches=1 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=20 pos=(15, 71) hp=100 foes=1 fps=10 kills=1 mined=0
+DEEPFALL_CHUNK stream=(1, 4) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=1 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(1, 5) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=1 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_ROOM t=24 room=3 pos=(28, 84)
+SOAK_TICK t=30 pos=(26, 84) hp=100 foes=3 fps=10 kills=1 mined=0
+SOAK_TICK t=40 pos=(31, 84) hp=100 foes=3 fps=9 kills=1 mined=0
+SOAK_STUCK t=44 pos=(31, 84) dir=1
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_TORCH_PLACED cell=(23, 84) held=1
+DEEPFALL_LOG Placed torch
+DEEPFALL_SAVE_SAVED reason=torch mined=0 cracked=0 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=50 pos=(31, 84) hp=100 foes=3 fps=7 kills=1 mined=0
+SOAK_STUCK t=54 pos=(31, 84) dir=1
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_CHUNK stream=(2, 5) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=0 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=60 pos=(32, 83) hp=100 foes=3 fps=6 kills=1 mined=0
+SOAK_STUCK t=66 pos=(32, 83) dir=1
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SAVE_SAVED reason=mine mined=0 cracked=1 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=0 cracked=2 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(1, 5) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=0 cracked=2 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=1 cracked=1 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=70 pos=(25, 84) hp=100 foes=3 fps=6 kills=1 mined=1
+SOAK_TICK t=80 pos=(27, 84) hp=100 foes=3 fps=6 kills=1 mined=1
+SOAK_STUCK t=88 pos=(18, 84) dir=-1
+DEEPFALL_LOG Tool: Pickaxe
+SOAK_TICK t=90 pos=(26, 84) hp=100 foes=3 fps=6 kills=1 mined=1
+DEEPFALL_CHUNK stream=(2, 5) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=1 cracked=1 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=100 pos=(32, 83) hp=100 foes=3 fps=6 kills=1 mined=1
+DEEPFALL_CHUNK stream=(1, 5) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=1 cracked=1 torches=2 slain=1 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_STUCK t=110 pos=(18, 84) dir=-1
+DEEPFALL_LOG Tool: Pickaxe
+SOAK_TICK t=110 pos=(18, 84) hp=100 foes=3 fps=6 kills=1 mined=1
+DEEPFALL_TORCH_PLACED cell=(27, 84) held=0
+DEEPFALL_LOG Placed torch
+DEEPFALL_SAVE_SAVED reason=torch mined=1 cracked=1 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(2, 5) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=1 cracked=1 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=120 pos=(32, 83) hp=100 foes=3 fps=5 kills=1 mined=1
+SOAK_STUCK t=122 pos=(32, 83) dir=1
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SAVE_SAVED reason=mine mined=2 cracked=0 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 3, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=2 cracked=1 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 3, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=2 cracked=2 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 3, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=3 cracked=1 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 4, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=0 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 5, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=1 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 5, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=2 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 5, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_CHUNK stream=(1, 5) loaded=6/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=4 cracked=2 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 5, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=130 pos=(29, 84) hp=100 foes=3 fps=5 kills=1 mined=4
+SOAK_STUCK t=136 pos=(31, 84) dir=1
+DEEPFALL_LOG Tool: Pickaxe
+SOAK_TICK t=140 pos=(29, 84) hp=100 foes=3 fps=5 kills=1 mined=4
+SOAK_TICK t=150 pos=(21, 84) hp=100 foes=3 fps=4 kills=1 mined=4
+SOAK_TICK t=160 pos=(17, 83) hp=100 foes=3 fps=6 kills=1 mined=4
+SOAK_STUCK t=161 pos=(17, 83) dir=-1
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=3 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 5, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=4 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 5, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=5 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 5, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=5 cracked=4 torches=3 slain=1 ore=0 inv={ "wood": 1, "stone": 6, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+SOAK_TICK t=170 pos=(25, 84) hp=100 foes=3 fps=4 kills=1 mined=5
+SOAK_TICK t=180 pos=(25, 84) hp=100 foes=3 fps=4 kills=1 mined=5
+SOAK_DONE t=180 deaths=0 stuck=8 kills=1 mined=5 rooms=4 fps_min=1 fps_avg=6 foes0=0 foes0max=0 near0=180

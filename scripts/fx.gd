@@ -129,7 +129,7 @@ func _process(delta: float) -> void:
 		# bounce off solid blocks (floor) with damping
 		if not fg.is_empty():
 			var cx := int(floor(np.x / 64.0)); var cy := int(floor(np.y / 64.0))
-			if cx >= 0 and cx < 80 and cy >= 0 and cy < 45 and fg[cy][cx] != 0 and fg[cy][cx] != 7:
+			if cx >= 0 and cx < DeepfallMapGen.W and cy >= 0 and cy < DeepfallMapGen.H and fg[cy][cx] != 0 and fg[cy][cx] != 7:
 				v.y = -v.y * 0.35
 				v.x *= 0.6
 				np = p["p"]

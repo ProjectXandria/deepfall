@@ -1,0 +1,123 @@
+Godot Engine v4.8.beta1.official.4d10419ca - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 20.1.2, 256 bits)
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+ALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory
+ALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default
+ERROR: Condition "status < 0" is true. Returning: ERR_CANT_OPEN
+   at: init_output_device (drivers/alsa/audio_driver_alsa.cpp:97)
+WARNING: All audio drivers failed, falling back to the dummy driver.
+     at: initialize (servers/audio/audio_driver.cpp:244)
+
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1602)
+     GDScript backtrace (most recent call first):
+         [0] _layout (res://scripts/touch_ui.gd:242)
+         [1] _ready (res://scripts/touch_ui.gd:168)
+DEEPFALL_W3_LEDGES legs=45 cells=1048
+DEEPFALL_SAVE_LOADED mined=40 cracked=0 torches=0 slain=0 ore=0 pos=(2027.99, 5271.99) hp=1 class=tech inv={ "wood": 1, "stone": 46, "dirt": 0, "coal": 4, "gold": 2, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_ENEMY_SPAWNS total=27
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(1, 5) loaded=6/78
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_PHASE1_READY seed=91838678 rooms=40/40 ore_veins=139 spawn=(6, 68) exit=(188, 70) connected=true load_ms=1984
+DEEPFALL_W8 tag=ready paused=false card_pending=0.00 card_open=false selecting=false dead=false hp=1 pos=(2027.99, 5294.19) class=tech
+DEEPFALL_W8 tag=p11_entry paused=false card_pending=0.00 card_open=false selecting=false dead=false hp=1 pos=(2027.99, 5294.19) class=tech
+DEEPFALL_W3_LEDGES legs=45 cells=1048
+DEEPFALL_ENEMY_SPAWNS total=27
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 4) loaded=6/78
+DEEPFALL_W8 tag=p11_post_rebuild paused=false card_pending=0.00 card_open=false selecting=false dead=false hp=100 pos=(416.0, 4384.0) class=tech
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_W8 tag=p13_entry paused=false card_pending=0.00 card_open=false selecting=false dead=false hp=100 pos=(416.0, 4384.0) class=tech
+DEEPFALL_DROP slug=miner-ghoul item=stone n=1
+DEEPFALL_ENEMY_SLAIN slug=miner-ghoul remaining=27
+DEEPFALL_LOG Slain miner-ghoul
+DEEPFALL_SAVE_SAVED reason=kill mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_W8 tag=p13_pre_physics_frame paused=false card_pending=0.00 card_open=false selecting=false dead=false hp=100 pos=(416.0, 4375.99) class=tech
+DEEPFALL_W8 tag=p13_post_physics_frame paused=false card_pending=0.00 card_open=false selecting=false dead=false hp=100 pos=(416.0, 4375.99) class=tech
+DEEPFALL_P13 death_anim corpses=1 drops=1 inv_unchanged=true (expect 1, 1, true)
+DEEPFALL_P11_SHOT death
+DEEPFALL_LOOT_COLLECTED item=stone n=1 total=1
+DEEPFALL_P13 loot_collected inv_delta=1 corpse_gone=true (expect 1, true)
+DEEPFALL_LOG Smashed a barrel: +1 Wood, +1 Torch
+DEEPFALL_PROP_BROKEN kind=barrel loot=+1 Wood, +1 Torch
+DEEPFALL_SAVE_SAVED reason=prop mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=p13 mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_W3_LEDGES legs=45 cells=1048
+DEEPFALL_SAVE_LOADED mined=0 cracked=0 torches=0 slain=0 ore=0 pos=(587.9443, 4375.99) hp=100 class=tech inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_ENEMY_SPAWNS total=27
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=77 skipped_broken=1
+DEEPFALL_CHUNK stream=(0, 4) loaded=6/78
+DEEPFALL_P13 prop_persist id=0 before=78 after_reload=77 gone=true smashed=1 (expect true, 1+)
+DEEPFALL_P13 ambience playing=true drone_pitch top=1.00 deep=0.72 rumble_db=-6.9 (expect true, 1.00, <0.8)
+DEEPFALL_PLAYER_DIED
+DEEPFALL_W8 tag=show_run_card:death paused=false card_pending=-0.02 card_open=false selecting=false dead=true hp=0 pos=(587.9443, 4375.99) class=tech
+DEEPFALL_RUN_CARD reason=death depth=68 kills=1 ore=0 mined=0 props=1
+DEEPFALL_P13 card_open=true paused=true (expect true, true)
+DEEPFALL_P11_SHOT card
+DEEPFALL_RUN_CARD_SHARED path=/home/hatch/.local/share/godot/app_userdata/DEEPFALL Phase 1/deepfall_run_card.png size=(846, 793)
+DEEPFALL_P13 share clipboard_ok=true file=true
+DEEPFALL_PLAYER_RESPAWN
+DEEPFALL_P13 after_card dead=false paused=false (expect false, false)
+DEEPFALL_P11 move touch_move=1.00 dx=96.2 (expect >0.9, >40)
+DEEPFALL_P11 multitouch_jump rose=110.7 vel_y=-190 (expect >30)
+DEEPFALL_P11_SHOT jump
+DEEPFALL_P11 released touch_move=0.00 on_ground=true
+DEEPFALL_P11 knockback dx=124.0 (expect > 20)
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SAVE_SAVED reason=mine mined=0 cracked=1 torches=0 slain=0 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_P11_SHOT mine
+DEEPFALL_SAVE_SAVED reason=mine mined=1 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=1 cracked=1 torches=0 slain=0 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_P11 aim_mine_down cell=(4, 69) before=3 after=0 (expect after 0)
+DEEPFALL_LOG Tool: Sword
+DEEPFALL_P11_SHOT sword
+DEEPFALL_P11 sword tool=sword golem_hp 50->35 pushed=15.8 orb_wait=0.0 (expect sword, lower, >10)
+DEEPFALL_DROP slug=rock-golem item=stone n=2
+DEEPFALL_ENEMY_SLAIN slug=rock-golem remaining=27
+DEEPFALL_LOG Slain rock-golem
+DEEPFALL_SAVE_SAVED reason=kill mined=1 cracked=1 torches=0 slain=0 ore=0 inv={ "wood": 1, "stone": 2, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOOT_COLLECTED item=stone n=1 total=3
+DEEPFALL_LOOT_COLLECTED item=stone n=1 total=4
+DEEPFALL_P11_SHOT push
+DEEPFALL_P11 crate_push dx=50.1 player_overlap=false (expect >20, false)
+DEEPFALL_LOG Smashed a pot: +1 Gold
+DEEPFALL_PROP_BROKEN kind=pot loot=+1 Gold
+DEEPFALL_SAVE_SAVED reason=prop mined=1 cracked=1 torches=0 slain=0 ore=0 inv={ "wood": 1, "stone": 4, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_P11 pot_broken=true loot_delta=1 pot_wait=0.0 (expect true, 1)
+DEEPFALL_P11 dash dx=146.0 cooldown=0.48 (expect |dx|>50, >0)
+DEEPFALL_LOG Ground slam!
+DEEPFALL_P11_SHOT slam
+DEEPFALL_P11 slam ghoul_hp 20->10 (expect lower)
+DEEPFALL_P11_SHOT end
+DEEPFALL_P11 done hp=100 props=77
+DEEPFALL_P12 enemy_art tex=res://assets/enemies_px/cave-spider/walk_2.png scale=3.0 (expect enemies_px, 3.0)
+DEEPFALL_P12 sfx loaded=12 volume=0.80
+DEEPFALL_P12 menu panel=true paused=true (expect true, true)
+DEEPFALL_P11_SHOT settings
+DEEPFALL_P12 scales stick_r=100.8 jump_radius=76.8 (expect 100.8, 76.8)
+DEEPFALL_P11_SHOT edit
+DEEPFALL_P12 move_button moved=true saved=true (expect true, true)
+DEEPFALL_P12 left_handed left_touch_is_aim=true paused=false (expect true, false)
+DEEPFALL_P11_SHOT lefthand
+DEEPFALL_P12 reset stick_r=72.0 (expect 72)
+DEEPFALL_P14 real_touch_jump screen_scale=1.50 touch_jump=true rose=110.7 (expect 1.50 at phone res, true, >30)
+DEEPFALL_P14 done
+WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2609)
+ERROR: 3 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+EXIT=0

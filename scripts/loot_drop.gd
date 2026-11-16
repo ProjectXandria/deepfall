@@ -31,13 +31,13 @@ func setup(p_item: String, n: int, p_main: Node) -> void:
 	z_index = 4
 
 func _solid(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = main_node.fg[cy][cx]
 	return t != 0 and t != 7
 
 func _platform(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
 	return main_node.fg[cy][cx] == 7
 

@@ -1,0 +1,8 @@
+=== W1 FINAL scratch gate chain start 05:31:14 ===
+selftest rc=0 errors=0
+p11-tech rc=0 errors=0
+p11-red rc=0 errors=0
+p11-mage rc=0 errors=0
+selftest-load rc=0 errors=0
+soak rc=0 errors=0
+=== W1 FINAL scratch gate chain done 05:40:08 ===

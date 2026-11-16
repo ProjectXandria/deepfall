@@ -1,0 +1,26 @@
+variant run started Sun Nov  8 20:56:22 PST 2026
+p11-tech rc=0
+p11-red rc=0
+p11-mage rc=0
+== verify-beta-p11-tech.log script_errors=0 ==
+DEEPFALL_P13 share clipboard_ok=true file=true
+DEEPFALL_P11 sword tool=sword golem_hp 50->35 pushed=-57.9 (expect sword, lower, >10)
+DEEPFALL_P11 pot_broken=true loot_delta=1 (expect true, 1)
+DEEPFALL_P11 slam ghoul_hp 20->10 (expect lower)
+DEEPFALL_P11 done hp=100 props=65
+DEEPFALL_P14 done
+== verify-beta-p11-red.log script_errors=0 ==
+DEEPFALL_P13 share clipboard_ok=true file=true
+DEEPFALL_P11 sword tool=sword golem_hp 50->30 pushed=-57.9 (expect sword, lower, >10)
+DEEPFALL_P11 pot_broken=true loot_delta=1 (expect true, 1)
+DEEPFALL_P11 slam ghoul_hp 20->10 (expect lower)
+DEEPFALL_P11 done hp=120 props=65
+DEEPFALL_P14 done
+== verify-beta-p11-mage.log script_errors=0 ==
+DEEPFALL_P13 share clipboard_ok=true file=true
+DEEPFALL_P11 sword tool=sword golem_hp 50->50 pushed=0.0 (expect sword, lower, >10)
+DEEPFALL_P11 pot_broken=false loot_delta=0 (expect true, 1)
+DEEPFALL_P11 slam ghoul_hp 20->10 (expect lower)
+DEEPFALL_P11 done hp=80 props=65
+DEEPFALL_P14 done
+VARIANT_CHAIN_DONE

@@ -1,0 +1,88 @@
+{
+  "base": "Phase 14b tree + _share_card headless guard fix + conditional --class pin + --soak mode; v1.1 APK (code 2) built 2026-11-06, link expired 2026-11-08 ~23:44 PST; GitHub still at 103f450a",
+  "deadline": "2026-11-13T08:05:00-08:00",
+  "loop": "deepfall-12h-improvement",
+  "needs_his_call": [
+    "Effekseer mage-orb impact scale 1.0 vs 2.0 (eyeball call)",
+    "GitHub push of Phase 14 + loop waves (currently local only, GitHub at 103f450a)",
+    "APK re-upload / download link (v1.1 link expired 2026-11-08 ~23:44 PST)",
+    "Phone-feel verdicts: deep-cave density, climb-out comfort, first-ten-minutes feel, startup-lag feel",
+    "Game Off entry pick: DEEPFALL vs Shiftworlds; AI-disclosure level; deadline Dec 1, 2026 13:37 PST"
+  ],
+  "queue": [
+    {
+      "branch": "none - local tree, no git",
+      "brief": "TEST-ONLY changes in main.gd test code. (1) P11 sword/pot checks: when class is mage, wait for the orb projectile to arrive (poll golem hp / pot state up to ~1s) instead of reading instantly, so the suite measures orb damage directly; keep tech/red instant reads unchanged. (2) Soak bot (_run_soak): give the unstick routine a mine-UPWARD escape (aim up + mine while jumping) so a bot that falls 35 rows can climb out instead of camping one deep room. Deliverables: edited main.gd test/soak code only, no game-behavior change. Gates: full suite tech/red/mage all rc=0 0 SCRIPT ERRORs; 180s soak seed 20261101 shows the bot visiting more than one room and fewer than 10 stuck events (report rooms visited + stuck count + kills/mined). Work on scratch copy loop-scratch/w1-mage-orb-wait-soak-climb/ (deepfall-game copy WITHOUT exports/), merge by explicit file copy, re-gate on live tree.",
+      "report": "loop/phases/w1-mage-orb-wait-soak-climb/REPORT.md",
+      "slug": "w1-mage-orb-wait-soak-climb",
+      "status": "done",
+      "title": "Test-infra: mage P11 orb-wait + soak bot mine-upward escape"
+    },
+    {
+      "branch": "none - local tree, no git",
+      "brief": "MEASURE FIRST. Run 3 soaks (180s each, seeds 20261101 + 2 fresh random seeds, tech) on the W1 tree and quantify foes=0 time per run. Then make the SMALLEST tuning change that gives the deep cave encounters without changing map structure (room-local spawns, 40/40 rooms, deterministic per seed). Options in order: (a) enemies drift/patrol toward the player within their room when the player is in an adjacent room; (b) deep-row (row > 60) rooms get +1 enemy. Do NOT redesign spawning. Prove with the same 3 seeds before/after (foes=0 time, kills, deaths). Gates: full suite all classes + 3 soaks with numbers. If no change beats baseline on the numbers, report that and change nothing.",
+      "report": "loop/phases/w2-deep-cave-encounters/REPORT.md",
+      "slug": "w2-deep-cave-encounters",
+      "status": "done",
+      "title": "Measure then tune deep-cave enemy encounters"
+    },
+    {
+      "branch": "none - local tree, no git",
+      "brief": "Map-gen only (map_gen.gd). Guarantee that from any room below row 60 the player can climb back up without mining: add stepped one-way platforms / ledges on the room's climb path, keeping the structured room+corridor algorithm, flood-fill validation, and per-seed determinism. Constraints: seed 20261101 READY line must stay rooms=40/40 ore_veins=138 spawn=(10,44) exit=(190,42) connected=true (ore count may shift only if the report says exactly why); verify 40/40 + connected on 3 seeds (20261101 + 2 fresh). Gates: full suite all classes + seed sweep + a soak showing the bot climbing at least 10 rows out of the deep cave. If platforms change the feel of mining, say so in the report.",
+      "report": "loop/phases/w3-climb-out-comfort/REPORT.md",
+      "slug": "w3-climb-out-comfort",
+      "status": "done",
+      "title": "Guarantee a climb-out path from deep rooms"
+    },
+    {
+      "branch": "none - local tree, no git",
+      "brief": "No world-gen output change: seed 20261101 READY line must stay byte-identical (rooms 40/40, ore 138, spawn/exit). Profile _ready/_rebuild_world staged steps (load_ms per stage in a scratch run), find the biggest first-frame hitches, and reduce them (defer work, split a stage, cache a lookup) without changing the generated world. Report load_ms before/after across 3 runs each (sandbox numbers are noisy \u2014 report the range, do not claim phone numbers). Gates: full suite all classes + READY-line identity check on 3 seeds.",
+      "report": "loop/phases/w4-startup-smoothness/REPORT.md",
+      "slug": "w4-startup-smoothness",
+      "status": "done",
+      "title": "Profile and smooth startup / first frames"
+    },
+    {
+      "branch": "none - local tree, no git",
+      "brief": "Close the BETA-REPORT section 4 animation gaps with procedural/transform work ONLY, labelled as such (never pass procedural previews off as hand-drawn; update staging ANIMATIONS.md honesty labels if touched): ore-mimic attack 4th pose, tunnel-worm walk extra frame, red/mage fall/land frames (documented reuse is acceptable if a new frame would read worse \u2014 say which). No new sprite generation in this wave; Skit's hand-drawn homework (PixiEditor/Pencil2D sheets) stays his. Gates: full suite all classes + Phase 9 animation checks green; report lists every frame added/reused with its label.",
+      "report": "loop/phases/w5-animation-gaps/REPORT.md",
+      "slug": "w5-animation-gaps",
+      "status": "done",
+      "title": "Close documented animation gaps, procedural only"
+    },
+    {
+      "branch": "none - local tree, no git",
+      "brief": "No game changes unless a crash/bug is found (then fix minimally and re-run). Run --soak 600s on 3 seeds (20261101 + 2 fresh), tech, plus a 180s soak each for red and mage. Record deaths/stuck/kills/mined/fps_min/fps_avg per run and rooms visited. Any stuck cluster or foes=0 stretch over 120s gets a named finding with position/seed, not a silent pass. Gates: all soaks rc=0, 0 SCRIPT ERRORs. Report is the stability evidence for the final digest.",
+      "report": "loop/phases/w6-long-soak-stability/REPORT.md",
+      "slug": "w6-long-soak-stability",
+      "status": "done",
+      "title": "Long soak: 10 min, 3 seeds, stability proof"
+    },
+    {
+      "branch": "none - local tree, no git",
+      "brief": "Verify the loop's end state. Re-run the full gates on the live tree (selftest, selftest-p11 all classes, selftest-load, 180s soak seed 20261101). Rebuild the Android APK with --export-debug (headless export stays proven) and verify with aapt2 badging + apksigner (expect versionCode 2 / versionName 1.1 unless a wave bumped it \u2014 report what it actually is). Do NOT upload the APK and do NOT create a download link \u2014 that needs Skit's word. Write the final digest (loop/DIGEST-2026-11-13.md): per-wave outcome with gate numbers, what is merge/push-ready vs what still needs Skit (orb scale call, phone feel verdicts, GitHub push, APK re-upload), and known issues the gates could not prove.",
+      "report": "loop/phases/w7-final-verify/REPORT.md",
+      "slug": "w7-final-verify",
+      "status": "done",
+      "title": "Final verification + APK rebuild (verify only, NO upload)"
+    },
+    {
+      "slug": "w8-selftest-p11-stall-diagnosis",
+      "title": "Diagnose the --selftest-p11 no-class stall",
+      "status": "done",
+      "branch": "none - local tree, no git",
+      "brief": "REPORT-FIRST diagnosis. --selftest-p11 with NO --class stalls after DEEPFALL_PHASE1_READY in this sandbox (solo xvfb run, 45-min stall, 0 SCRIPT ERRORs, game boots/loads/spawns fine). A/B 2026-11-13 proved it is NOT the KayKit additions (identical stall with skeleton-warrior removed, 300s EXIT 124). Per-class runs (--class=tech/red/mage) complete fine, so each class is verified; only the single-command all-classes form is unverified. Find WHY: read _run_selftest_p11 and the no-class path (does it re-run _ready/rebuild per class? await something that never fires, like the old _share_card frame_post_draw hang? class-switch state? harness deadlock?). Instrument with prints, run solo under xvfb-run -a -s '-screen 0 2560x1440x24' --resolution 2400x1080 seed 20261101 with a detached runner (setsid+nohup, SOAK_TIMEOUT-style generous timeout, logs to workspace loop/phases/w8-selftest-p11-stall-diagnosis/ NEVER /tmp). If a real bug is found (game or harness), fix minimally, prove FAIL-pre / PASS-post with the same no-class command, then full gates (selftest, p11 tech/red/mage, selftest-load proper sequence). If it is a sandbox-only artifact, say so with evidence and change NOTHING in the game. Work on scratch copy loop-scratch/w8-selftest-p11-stall-diagnosis/ (deepfall-game copy WITHOUT exports/), merge by explicit file copy only, re-gate on live tree.",
+      "report": "loop/phases/w8-selftest-p11-stall-diagnosis/REPORT.md"
+    },
+    {
+      "slug": "w9-card-state-hardening-docs-refresh",
+      "title": "Harden _rebuild_world card reset + refresh docs",
+      "status": "done",
+      "branch": "none - local tree, no git",
+      "brief": "Two parts, one wave. PART A (code): harden _rebuild_world so it resets run-card state in general (_card_pending, _card_reason, _card_open incl. closing an open card, _respawn_timer, and any related player-dead state \u2014 determine the full set from the W8 report and the code). W8 fixed this only at _run_selftest_p11 entry; the general hole is still open. Needs its own FAIL-pre proof: craft the W8-style repro (a save that arms the card during _ready) showing the stale card biting THROUGH _rebuild_world, then fix, then PASS-post with the same repro. _rebuild_world is also called on new run / continue in real play, so prove no gameplay regression: the run card must still open on a real death in normal play (death -> card -> continue/new-run flow) and the full gates must stay green. Keep the W8 suite-entry clear (defense in depth) unless the general fix provably subsumes it \u2014 say which, with evidence. PART B (docs only, no code): refresh PHASE1-README.md (ends at Phase 10) and asset-pipeline/staging/deepfall/MANIFEST.md (stale to 2026-11-03) to cover Phase 14, 14b, the hard beta run, the floor-guard fix, soak, loop waves W1-W8, and the KayKit additions; check README.md (documents 11-13) and ANIMATIONS.md (updated by W5) for staleness too and bring them current. Keep existing honesty labels (PROC/REUSE/SOURCE/SYNTH) where they exist. Work on scratch copy loop-scratch/w9-card-state-hardening-docs-refresh/ (deepfall-game copy WITHOUT exports/), merge by explicit file copy only, re-gate on live tree.",
+      "report": "loop/phases/w9-card-state-hardening-docs-refresh/REPORT.md"
+    }
+  ],
+  "scope": "DEEPFALL only, refine-only, no new features, no push/publish/upload",
+  "started": "2026-11-12T20:05:00-08:00"
+}

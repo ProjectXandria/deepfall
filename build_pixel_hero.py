@@ -33,6 +33,15 @@ PAL = {
         "s": (200, 160, 130), "h": (24, 18, 44), "t": (120, 240, 210),
         "k": (34, 26, 58), "m": (100, 70, 44), "g": (220, 200, 110),
     },
+    # Chunk 3: unlockable hooded skeleton — dark violet robe (a/b/c),
+    # bone-white skull face (w/s) with glowing blue eyes (v), deep hood (h).
+    # Uses the shared ARM/LEG maps and the MAGE_TORSO robe below.
+    "skeleton": {
+        "o": (16, 10, 26), "a": (74, 52, 110), "b": (118, 90, 172),
+        "c": (44, 28, 74), "v": (120, 220, 255), "w": (228, 226, 212),
+        "s": (214, 208, 188), "h": (30, 18, 50), "t": (150, 110, 200),
+        "k": (24, 16, 38), "m": (90, 70, 50), "g": (200, 180, 90),
+    },
 }
 
 HEADS = {
@@ -71,6 +80,20 @@ HEADS = {
         ".oaaahhhhao",
         "..ocaaaaco.",
         "...oooooo..",
+    ],
+    # Chunk 3: hooded skull — dark hood (h) framing a bone-white face (w)
+    # with two glowing eyes (v) and a toothed grin (s/k).
+    "skeleton": [
+        "...oooooo..",
+        "..ohhhhhho.",
+        ".ohhhhhhhho",
+        ".ohwwwwwwho",
+        ".ohwvwwvwho",
+        ".ohwwwwwwho",
+        ".ohwsksksho",
+        ".ohwwwwwwho",
+        "..ohhhhhho.",
+        "...ooooo...",
     ],
 }
 
@@ -286,7 +309,7 @@ def preview(cls, head, torso, arm, leg, tool):
 def main():
     for cls, pal in PAL.items():
         head = render(HEADS[cls], pal)
-        torso = render(MAGE_TORSO if cls == "mage" else TORSO, pal)
+        torso = render(MAGE_TORSO if cls in ("mage", "skeleton") else TORSO, pal)
         arm = render(ARM, pal)
         leg = render(LEG, pal)
         save(head, cls, "head.png")

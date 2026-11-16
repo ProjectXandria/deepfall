@@ -14,6 +14,17 @@ const KINDS := {
 	"crate": {"hp": 3, "half": Vector2(28, 28), "push": true, "friction": 9.0, "bounce": 0.15, "tex": "crate", "scale": 4.0},
 	"barrel": {"hp": 2, "half": Vector2(26, 30), "push": true, "friction": 1.6, "bounce": 0.35, "tex": "barrel", "scale": 4.0},
 	"pot": {"hp": 1, "half": Vector2(20, 20), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "pot", "scale": 3.4},
+	# KayKit bake 2026-11-13 (CC0): chest.gltf.glb side-view render,
+	# assets/hero/props/chest.png (21x16). Mirrors pot: 1 hit, not
+	# pushable, drops gold (see main.gd prop_broken).
+	"chest": {"hp": 1, "half": Vector2(26, 22), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "chest", "scale": 3.4},
+	# Chunk 1 (2026-11-14): the other four staged KayKit props, same
+	# pattern as the chest — 1 hit, not pushable, roll-based loot in
+	# main.gd prop_broken. Column is the heavy one (3 hits, stone).
+	"candle": {"hp": 1, "half": Vector2(10, 24), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "candle_lit", "scale": 3.4},
+	"banner": {"hp": 1, "half": Vector2(14, 28), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "banner_red", "scale": 3.4},
+	"column": {"hp": 3, "half": Vector2(18, 32), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "column", "scale": 3.4},
+	"coins": {"hp": 1, "half": Vector2(26, 16), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "coin_stack_small", "scale": 3.4},
 }
 
 var kind := "crate"
@@ -52,13 +63,13 @@ func _fg() -> Array:
 	return main_node.fg
 
 func _solid(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = _fg()[cy][cx]
 	return t != 0 and t != 7
 
 func _platform(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
 	return _fg()[cy][cx] == 7
 

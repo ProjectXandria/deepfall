@@ -1,0 +1,407 @@
+# enemy.gd — DEEPFALL Phase 5: one enemy class driven by a stats dict.
+# Phase 9: the cave bat FLIES (sine hover, no ground collision); the other
+# five slugs stay ground-walking. The bat's walk frames still read as a
+# low sway — that is the staged art, not the movement.
+# player uses (solid = t != 0 and t != 7; 7 = one-way platform, landed on
+# only when falling with feet above it). An enemy that spawns with no
+# ground under it falls with gravity until it lands — it never teleports.
+#
+# Collision boxes are deliberately modest vs the 256px-tall art (the art
+# is wide/flourished; the box is the body): half_w/half_h per slug below.
+# Sprite scale is a uniform 0.5, so the 256px canvas reads 128px tall;
+# the sprite is anchored bottom-centre, feet at position.y + half_h.
+#
+# Attack has a real windup: the first ~0.35s is windup, damage lands at
+# the strike point (~0.4s in, frame 2-ish), then a 1.0s cooldown — the
+# player can dodge out of range during the windup.
+extends Node2D
+
+signal died(enemy)
+
+const TILE := 64
+const GRAVITY := 1800.0
+const WINDUP := 0.35
+const STRIKE_AT := 0.40
+const COOLDOWN := 1.0
+const PX_SCALE := 3.0
+
+# slug -> {hp, speed, damage, aggro, range, half_w, half_h, walk, attack, wander}
+# walk/attack are EXACT frame counts from assets/enemies/MANIFEST.md:
+# W5: ore-mimic attack is 4 frames (attack_3 = PROC follow-through
+# lunge, translated from attack_2 — see loop/phases/w5-animation-gaps/
+# w5-build-frames.py); tunnel-worm walk is 3 frames (walk_2 = PROC
+# mid-slither sine phase from walk_1).
+const STATS := {
+	"cave-bat-swarm": {"hp": 10, "speed": 150.0, "damage": 5, "aggro": 260.0, "range": 48.0, "half_w": 20.0, "half_h": 16.0, "walk": 4, "attack": 4, "wander": true},
+	"miner-ghoul": {"hp": 20, "speed": 90.0, "damage": 8, "aggro": 300.0, "range": 56.0, "half_w": 14.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	"rock-golem": {"hp": 50, "speed": 45.0, "damage": 12, "aggro": 240.0, "range": 64.0, "half_w": 22.0, "half_h": 40.0, "walk": 4, "attack": 4, "wander": true},
+	"cave-spider": {"hp": 15, "speed": 130.0, "damage": 6, "aggro": 320.0, "range": 52.0, "half_w": 24.0, "half_h": 24.0, "walk": 4, "attack": 4, "wander": true},
+	"ore-mimic": {"hp": 30, "speed": 60.0, "damage": 10, "aggro": 200.0, "range": 60.0, "half_w": 20.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": false},
+	"tunnel-worm": {"hp": 25, "speed": 70.0, "damage": 8, "aggro": 280.0, "range": 64.0, "half_w": 26.0, "half_h": 20.0, "walk": 3, "attack": 4, "wander": true},
+	# KayKit bake 2026-11-13 (CC0): Skeleton_Warrior.glb side-view renders,
+	# Walking_A / 1H_Melee_Attack_Chop / Idle clips, Skeleton_Blade on
+	# handslot.r. Pixel frames in assets/enemies_px/skeleton-warrior/
+	# (26px sets, Phase 12 style); hi-res 256px source sets in
+	# assets/enemies/skeleton-warrior/. half_w is the body, not the sword.
+	"skeleton-warrior": {"hp": 25, "speed": 80.0, "damage": 8, "aggro": 280.0, "range": 56.0, "half_w": 12.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	# Chunk 1 (2026-11-14): staged multiframe sets converted by
+	# build_chunk1_enemies.py (256px hi-res in assets/enemies/,
+	# 26px LANCZOS game set in assets/enemies_px/, slump death).
+	# Both are dungeon-plausible undead; the wraith is wide (38px
+	# canvas) so its body half-width is 16, not 12.
+	"grave-revenant": {"hp": 30, "speed": 70.0, "damage": 10, "aggro": 280.0, "range": 60.0, "half_w": 12.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	"ash-wraith": {"hp": 20, "speed": 110.0, "damage": 6, "aggro": 300.0, "range": 52.0, "half_w": 16.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	# Chunk 1 (2026-11-14): KayKit Skeleton Rogue, Blender-baked by
+	# bake_rogue.py (walk Walking_A_Rig, attack 1H stab, idle Idle_Rig;
+	# Skeleton_Crossbow on handslot.r, visual only — the AI is melee).
+	# Fast, fragile flanker: lowest hp, highest speed of the skeletons.
+	"skeleton-rogue": {"hp": 15, "speed": 140.0, "damage": 6, "aggro": 320.0, "range": 52.0, "half_w": 12.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+}
+
+var slug := ""
+var spawn_id := -1
+var fg: Array = []
+var player: Node2D = null
+var main_node: Node = null
+
+var hp := 10
+var max_hp := 10
+var speed := 90.0
+var damage := 5
+var aggro_range := 260.0
+var attack_range := 48.0
+var half_w := 14.0
+var half_h := 32.0
+var _wander := true
+
+var vel := Vector2.ZERO
+var facing := -1
+var on_ground := false
+var dead := false
+
+var _walk_frames: Array = []
+var _attack_frames: Array = []
+var _idle_frame: Texture2D = null
+var _sprite: Sprite2D = null
+var _anim_time := 0.0
+var _moving := false
+
+var _wander_dir := 1
+var _wander_timer := 0.0
+var _attack_timer := 0.0
+var _attack_duration := 0.5
+var _strike_at := 0.4
+var _struck := false
+var _cooldown_timer := 0.0
+var _hurt_timer := 0.0
+var _kb_timer := 0.0
+var _kb_vel := 0.0
+var _flash_timer := 0.0
+var _half_tex_h := 64.0
+var _squash := 0.0
+var _was_ground := false
+# Phase 9: the cave bat FLIES now (sine hover around its spawn height, no
+# ground collision, no ledge logic). Every other slug stays ground-walking.
+var _flying := false
+var _hover_base_y := 0.0
+var _hover_time := 0.0
+
+func setup(p_slug: String, p_fg: Array, p_player: Node2D, p_main: Node) -> void:
+	slug = p_slug
+	fg = p_fg
+	player = p_player
+	main_node = p_main
+	var st: Dictionary = STATS[slug]
+	max_hp = int(st["hp"])
+	hp = max_hp
+	speed = float(st["speed"])
+	damage = int(st["damage"])
+	aggro_range = float(st["aggro"])
+	attack_range = float(st["range"])
+	half_w = float(st["half_w"])
+	half_h = float(st["half_h"])
+	_wander = bool(st["wander"])
+	_flying = slug == "cave-bat-swarm"
+	for i in range(int(st["walk"])):
+		_walk_frames.append(load("res://assets/enemies_px/%s/walk_%d.png" % [slug, i]))
+	for i in range(int(st["attack"])):
+		_attack_frames.append(load("res://assets/enemies_px/%s/attack_%d.png" % [slug, i]))
+	# Phase 12: pixel-art frames (build_pixel_enemies.py) at x3, the
+	# same pixel density as the hero. Feet on the canvas bottom row.
+	_idle_frame = load("res://assets/enemies_px/%s/idle.png" % slug)
+	_sprite = Sprite2D.new()
+	_sprite.scale = Vector2(PX_SCALE, PX_SCALE)
+	_half_tex_h = _idle_frame.get_height() * PX_SCALE * 0.5
+	_sprite.position = Vector2(0, half_h - _half_tex_h)
+	_sprite.texture = _idle_frame
+	add_child(_sprite)
+	_wander_dir = 1 if randi() % 2 == 0 else -1
+	_wander_timer = randf_range(1.5, 3.5)
+
+func take_hit(dmg: int, from_x: float, kb: Vector2 = Vector2.ZERO) -> void:
+	# Phase 11: real knockback physics — the hit launches the enemy
+	# (up + away, or along the swing), it slides with friction, bounces
+	# off walls, and its AI is stunned until the impulse plays out.
+	if dead:
+		return
+	hp -= dmg
+	_hurt_timer = 0.15
+	_flash_timer = 0.09
+	var mass: float = clampf(float(max_hp) / 20.0, 0.6, 2.5)
+	if kb == Vector2.ZERO:
+		kb = Vector2(260.0 if position.x >= from_x else -260.0, -200.0)
+	vel.x = kb.x / mass
+	if not _flying:
+		vel.y = minf(vel.y, kb.y / sqrt(mass))
+	_kb_timer = 0.32
+	_attack_timer = 0.0
+	_squash = 1.0
+	if hp <= 0:
+		_die()
+
+func _die() -> void:
+	dead = true
+	var fxn: Node = main_node.get("fx") if main_node != null else null
+	if fxn != null:
+		fxn.burst(position, Color(0.85, 0.3, 0.35), 18, 380.0, 1200.0, 7.0, 0.8)
+		fxn.shake(6.0)
+		fxn.sfx("enemy_die", 0.12)
+	# Phase 13: species death animation (corpse keeps the knockback
+	# momentum and falls) replaces the generic poof.
+	if main_node != null and main_node.has_method("spawn_enemy_corpse"):
+		main_node.call("spawn_enemy_corpse", self)
+	died.emit(self)
+	queue_free()
+
+func _physics_process(delta: float) -> void:
+	if dead:
+		return
+	_hurt_timer = max(0.0, _hurt_timer - delta)
+	_cooldown_timer = max(0.0, _cooldown_timer - delta)
+	_hover_time += delta
+	if _flying:
+		# Hover: sine bob around the spawn height, clamped to ±20 px so
+		# the bat never drifts into a floor or ceiling. No gravity, no
+		# Y collision — X collision still applies (walls stop it).
+		if _hover_base_y == 0.0:
+			_hover_base_y = position.y
+		vel.y = sin(_hover_time * 2.5) * 24.0
+	else:
+		vel.y += GRAVITY * delta
+		if vel.y > 1200.0:
+			vel.y = 1200.0
+	_moving = false
+	if _kb_timer > 0.0:
+		_kb_timer -= delta
+		vel.x = move_toward(vel.x, 0.0, (900.0 if on_ground else 250.0) * delta)
+	elif _attack_timer > 0.0:
+		# Attacking: planted. Windup first, strike, then finish.
+		vel.x = 0.0
+		_attack_timer -= delta
+		if not _struck and _attack_timer <= _attack_duration - _strike_at:
+			_struck = true
+			_strike()
+		if _attack_timer <= 0.0:
+			_cooldown_timer = COOLDOWN
+	elif _cooldown_timer > 0.0:
+		vel.x = 0.0
+	else:
+		_ai(delta)
+	var was_ground := on_ground
+	var vx_before := vel.x
+	_move_axis(delta, true)
+	if _kb_timer > 0.0 and vel.x == 0.0 and absf(vx_before) > 120.0:
+		vel.x = -vx_before * 0.45
+		_squash = 1.0
+	if _flying:
+		position.y += vel.y * delta
+		position.y = clampf(position.y, _hover_base_y - 20.0, _hover_base_y + 20.0)
+		on_ground = false
+	else:
+		_move_axis(delta, false)
+	# Turn at walls: we tried to move horizontally but got stopped.
+	# (Flying bats turn the same way; they just never use on_ground.)
+	if _moving and (_flying or on_ground) and vel.x == 0.0 and _kb_timer <= 0.0 and _attack_timer <= 0.0:
+		_wander_dir = -_wander_dir
+		facing = _wander_dir
+	if on_ground and not _was_ground:
+		_squash = maxf(_squash, 0.7)
+	_was_ground = on_ground
+	_update_animation(delta)
+
+func _ai(delta: float) -> void:
+	if player == null or (player.has_method("is_dead") and player.call("is_dead")):
+		_idle_wander(delta)
+		return
+	var to_player: Vector2 = player.position - position
+	var dist: float = to_player.length()
+	var dy: float = absf(to_player.y)
+	if dist <= attack_range and dy < 56.0:
+		# Start attack: face the player, plant, windup then strike.
+		facing = 1 if to_player.x >= 0.0 else -1
+		_attack_duration = _attack_frames.size() / 8.0
+		# W5: mimic attack is 4 frames (0.5s): strike must land
+		# inside the animation, so clamp the strike point to 60% in.
+		_strike_at = minf(STRIKE_AT, _attack_duration * 0.6)
+		_attack_timer = _attack_duration
+		_struck = false
+		vel.x = 0.0
+		return
+	if dist <= aggro_range and dy < 200.0:
+		# Chase: move toward the player, turn at ledges.
+		var dir := 1 if to_player.x > 0.0 else -1
+		facing = dir
+		if _ground_ahead(dir):
+			vel.x = dir * speed
+			_moving = true
+		else:
+			vel.x = 0.0
+		return
+	_idle_wander(delta)
+
+func _idle_wander(delta: float) -> void:
+	if not _wander:
+		vel.x = 0.0
+		return
+	_wander_timer -= delta
+	if _wander_timer <= 0.0:
+		_wander_timer = randf_range(1.5, 3.5)
+		_wander_dir = -_wander_dir
+	facing = _wander_dir
+	if _flying:
+		# No ground under a bat by design: it wanders in the air.
+		vel.x = _wander_dir * speed * 0.4
+		_moving = true
+		return
+	if on_ground and not _ground_ahead(_wander_dir):
+		_wander_dir = -_wander_dir
+		facing = _wander_dir
+	if on_ground and _ground_ahead(_wander_dir):
+		vel.x = _wander_dir * speed * 0.4
+		_moving = true
+	else:
+		vel.x = 0.0
+
+func _ground_ahead(dir: int) -> bool:
+	# Is there ground (solid or platform) under the cell just ahead of
+	# the feet? Used to turn at ledges instead of walking off.
+	if not on_ground:
+		return true
+	var ahead_x: float = position.x + dir * (half_w + 4.0)
+	var feet_y: float = position.y + half_h + 4.0
+	var cx := int(floor(ahead_x / TILE))
+	var cy := int(floor(feet_y / TILE))
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
+		return false
+	var t: int = fg[cy][cx]
+	return t != 0
+
+func _strike() -> void:
+	if player == null or dead:
+		return
+	if player.has_method("is_dead") and player.call("is_dead"):
+		return
+	var to_player: Vector2 = player.position - position
+	if absf(to_player.x) <= attack_range + 8.0 and absf(to_player.y) < 64.0:
+		if player.has_method("take_hit"):
+			player.call("take_hit", damage, position.x)
+
+func _update_animation(delta: float) -> void:
+	_anim_time += delta
+	var frames: Array
+	var fps := 6.0
+	if _attack_timer > 0.0:
+		frames = _attack_frames
+		fps = 8.0
+	elif _moving:
+		frames = _walk_frames
+		fps = 6.0
+	else:
+		frames = [_idle_frame]
+		fps = 1.0
+	var idx := 0
+	if _attack_timer > 0.0:
+		idx = min(int((_attack_duration - _attack_timer) * 8.0), frames.size() - 1)
+	else:
+		idx = int(_anim_time * fps) % frames.size()
+	_sprite.texture = frames[idx]
+	_sprite.flip_h = facing < 0
+	# Phase 11 feel: white hit flash, then a red tint; squash on hits /
+	# landings; wind-up telegraph (lean back + warm glow) before strikes;
+	# a gentle idle breathe so standing foes are never frozen.
+	_flash_timer = maxf(0.0, _flash_timer - delta)
+	_squash = maxf(0.0, _squash - delta * 5.0)
+	if _flash_timer > 0.0:
+		_sprite.modulate = Color(3.0, 3.0, 3.0, 1.0)
+	elif _hurt_timer > 0.0:
+		_sprite.modulate = Color(1.0, 0.35, 0.35, 1.0)
+	elif _attack_timer > 0.0 and not _struck:
+		var k := 0.5 + 0.5 * sin(_anim_time * 30.0)
+		_sprite.modulate = Color(1.0 + 0.6 * k, 1.0 + 0.2 * k, 0.8, 1.0)
+	else:
+		_sprite.modulate = Color(1, 1, 1, 1)
+	var sq := sin(_squash * PI) * 0.18
+	var breathe := 0.0 if _moving or _attack_timer > 0.0 else sin(_anim_time * 3.0) * 0.015
+	_sprite.scale = Vector2(PX_SCALE * (1.0 + sq), PX_SCALE * (1.0 - sq + breathe))
+	_sprite.position = Vector2(0, half_h - _half_tex_h * (1.0 - sq + breathe))
+	var lean := 0.0
+	if _attack_timer > 0.0:
+		lean = (-0.12 if not _struck else 0.1) * facing
+	elif _kb_timer > 0.0:
+		lean = signf(vel.x) * 0.15
+	_sprite.rotation = lerpf(_sprite.rotation, lean, minf(1.0, 12.0 * delta))
+
+func _solid(cx: int, cy: int) -> bool:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
+		return true
+	var t: int = fg[cy][cx]
+	return t != 0 and t != 7
+
+func _platform(cx: int, cy: int) -> bool:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
+		return false
+	return fg[cy][cx] == 7
+
+func _move_axis(delta: float, x_axis: bool) -> void:
+	if x_axis:
+		position.x += vel.x * delta
+		var top := int(floor((position.y - half_h) / TILE))
+		var bot := int(floor((position.y + half_h - 1) / TILE))
+		if vel.x > 0:
+			var cx := int(floor((position.x + half_w) / TILE))
+			for cy in range(top, bot + 1):
+				if _solid(cx, cy):
+					position.x = cx * TILE - half_w - 0.01
+					vel.x = 0.0
+					break
+		elif vel.x < 0:
+			var cx := int(floor((position.x - half_w) / TILE))
+			for cy in range(top, bot + 1):
+				if _solid(cx, cy):
+					position.x = (cx + 1) * TILE + half_w + 0.01
+					vel.x = 0.0
+					break
+	else:
+		var prev_feet := position.y + half_h
+		position.y += vel.y * delta
+		var left := int(floor((position.x - half_w + 1) / TILE))
+		var right := int(floor((position.x + half_w - 1) / TILE))
+		on_ground = false
+		if vel.y > 0:
+			var cy := int(floor((position.y + half_h) / TILE))
+			for cx in range(left, right + 1):
+				if _solid(cx, cy) or (_platform(cx, cy) and prev_feet <= cy * TILE + 1):
+					position.y = cy * TILE - half_h - 0.01
+					vel.y = 0.0
+					on_ground = true
+					break
+		elif vel.y < 0:
+			var cy := int(floor((position.y - half_h) / TILE))
+			for cx in range(left, right + 1):
+				if _solid(cx, cy):
+					position.y = (cy + 1) * TILE + half_h + 0.01
+					vel.y = 0.0
+					break
+
+func cell() -> Vector2i:
+	return Vector2i(int(floor(position.x / TILE)), int(floor(position.y / TILE)))

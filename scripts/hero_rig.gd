@@ -28,6 +28,9 @@ var _cape_pts: Array = []
 var _cape_prev: Array = []
 var _trail_pts: Array = []
 var _phase := 0.0
+# Chunk 3: run-cycle leg amplitude per class, echoing each class's staged
+# walk cycle — tech runs wide, red standard, mage/skeleton glide in robes.
+var _run_amp := 0.75
 var _time := 0.0
 var _tool_name := "pickaxe"
 var _class_id := "tech"
@@ -100,7 +103,8 @@ func set_class(id: String) -> void:
 		(limb.get_node("S") as Sprite2D).texture = load(base + "leg.png")
 	_torso.texture = load(base + "torso.png")
 	(_head.get_node("S") as Sprite2D).texture = load(base + "head.png")
-	var cape_col := {"tech": Color(0.24, 0.78, 0.9), "red": Color(0.75, 0.12, 0.14), "mage": Color(0.3, 0.22, 0.6)}
+	_run_amp = {"tech": 0.95, "red": 0.75, "mage": 0.45, "skeleton": 0.6}.get(id, 0.75)
+	var cape_col := {"tech": Color(0.24, 0.78, 0.9), "red": Color(0.75, 0.12, 0.14), "mage": Color(0.3, 0.22, 0.6), "skeleton": Color(0.32, 0.18, 0.55)}
 	_cape.default_color = cape_col.get(id, Color(0.5, 0.5, 0.5))
 	_cape_pts.clear()
 	_cape_prev.clear()
@@ -110,7 +114,7 @@ func set_tool(t: String) -> void:
 	_tool_name = t
 	var tex_name := "pickaxe"
 	if t == "sword":
-		tex_name = "staff" if _class_id == "mage" else "sword"
+		tex_name = "staff" if _class_id == "mage" else ("scythe" if _class_id == "skeleton" else "sword")
 	var tex: Texture2D = load("res://assets/hero/tools/%s.png" % tex_name)
 	_tool.texture = tex
 	_tool.offset = Vector2(-floor(tex.get_width() / 2.0), -tex.get_height() + 1)
@@ -155,11 +159,26 @@ func animate(st: Dictionary) -> void:
 	elif bool(st["crouch"]):
 		fl = -0.9; bl = 0.7; fa = -0.3; ba = 0.3
 		body_y = 3.0
+	elif bool(st.get("climb", false)):
+		# Chunk 3: pose preview only — no ladder state exists in-game yet.
+		# Arms reach up in turns, legs bent on rungs.
+		var cs := sin(_time * 6.0) * 0.3
+		fa = -2.6 + cs; ba = -2.2 - cs
+		fl = -0.5; bl = 0.4
+		body_y = 0.0
+	elif bool(st.get("swim", false)):
+		# Chunk 3: pose preview only — no water state exists in-game yet.
+		# Prone lean, paddling arms, kicking legs.
+		var ss := sin(_time * 8.0)
+		fa = -1.2 + ss * 0.5; ba = -1.0 - ss * 0.5
+		fl = -0.4 + ss * 0.4; bl = 0.4 - ss * 0.4
+		body_y = 1.0
+		lean = 0.9
 	elif speed_ratio > 0.08:
 		_phase += delta * (7.0 + 7.0 * speed_ratio)
 		var s := sin(_phase)
-		fl = -s * 0.75 * minf(1.0, speed_ratio + 0.3)
-		bl = s * 0.75 * minf(1.0, speed_ratio + 0.3)
+		fl = -s * _run_amp * minf(1.0, speed_ratio + 0.3)
+		bl = s * _run_amp * minf(1.0, speed_ratio + 0.3)
 		fa = s * 0.7
 		ba = -s * 0.7
 		body_y = -roundf(absf(cos(_phase)))

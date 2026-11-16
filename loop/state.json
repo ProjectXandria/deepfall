@@ -1,0 +1,135 @@
+{
+  "active": null,
+  "deadline": "2026-11-13T08:05:00-08:00",
+  "last_digest": "loop/DIGEST-2026-11-14.md",
+  "log": [
+    {
+      "at": "2026-11-12T20:05:00-08:00",
+      "event": "loop started by Skit: 12h DEEPFALL improvement loop, refine-only, local only, no push/publish/upload",
+      "note": "Baseline: Phase 14b tree + guard fix + conditional class pin + soak mode. Beta ALL GREEN 2026-11-08; soak 180s 0 errors, 2 kills, 10 stuck (bot limit). v1.1 APK link expired 2026-11-08 ~23:44 PST; GitHub at 103f450a."
+    },
+    {
+      "at": "2026-11-12T20:05:00-08:00",
+      "event": "W1 spawned (builder subagent)",
+      "note": "w1-mage-orb-wait-soak-climb: test-only, mage orb-wait + soak mine-up escape."
+    },
+    {
+      "at": "2026-11-13T05:03:00-08:00",
+      "event": "W1 builder interrupted by runtime restart during soak2 gate; resumed",
+      "note": "Soak1 gate timed out rc=124 (timeout too tight); soak2 (timeout 1200) killed by restart ~05:02 PST, log ends at READY, no SOAK_DONE. All other scratch gates green (selftest, p11 tech/red/mage, selftest-load, rc=0, 0 errors). No REPORT.md yet, no merge to live tree. Builder resumed to re-run soak gate and finish."
+    },
+    {
+      "at": "2026-11-13T05:49:00-08:00",
+      "event": "W1 done (builder subagent): mage orb-wait + soak mine-up escape, merged to live tree, re-gated green",
+      "note": "Mage P11 gaps closed: sword 50->38 (orb dmg 12 measured), pot true loot 1, dash 146.0; tech 50->35, red 50->30; all suites rc=0, 0 SCRIPT ERRORs on scratch AND live re-gate. Soak 180s seed 20261101: deaths 0, stuck 6 (beta 10), kills 2, mined 6 (beta 11), rooms 3 (fall path only), fps 1/5. Climb-out NOT achieved: bot still camps pit rows 79-81; steep ray finds only air (probe -1,-1), shallow wall mining stalls at reach limit. Full evidence in loop/phases/w1-mage-orb-wait-soak-climb/REPORT.md. Root cause of soak1-3 failures: commands omitted the --soak flag (only --soak-secs=180), game sat idle. W3 owns the real climb-out fix."
+    },
+    {
+      "at": "2026-11-12T22:07:37-08:00",
+      "event": "W2 spawned (builder subagent)",
+      "note": "w2-deep-cave-encounters: measure-then-tune deep-cave enemy encounters (3x 180s soaks, seeds 20261101 + 2 fresh, before/after). W1 verified done: REPORT.md present, queue done, no live Godot."
+    },
+    {
+      "at": "2026-11-12T23:14:00-08:00",
+      "event": "W2 builder cancelled by tick timeout; finisher spawned from main chat",
+      "note": "Tick-spawned W2 builder (22:07) was cancelled at ~23:09 PST when the cron run hit its 60m timeout; its agent is unresumable (owned by the scheduled run). Its work survives: baseline gates rc=0 + 3 soaks, opt-A drift gates rc=0 through soak s2, opt-A soak s3 still running as a surviving Godot process. Finisher spawned from main chat (survives like W1) to wait for s3, decide, write REPORT.md, merge, re-gate, settle queue/state."
+    },
+    {
+      "at": "2026-11-13T01:09:00-08:00",
+      "event": "W2 finisher #1 gone; finisher #2 spawned from main chat",
+      "note": "01:06 tick found finisher #1 gone, no REPORT.md, but opt-B full gate chain green (done 08:44 UTC, restart recovery mid-chain). Opt-B: s1 foes0 146->105 kills 2->3, s2 kills 1->3, s3 unchanged foes0=180 (bot camps foe-less room). Opt-A s3 never finished (no SOAK_DONE). Finisher #2 spawned to verify, decide, merge if warranted, re-gate live, write REPORT.md, settle queue/state."
+    },
+    {
+      "at": "2026-11-13T01:41:00-08:00",
+      "event": "W2 done (finisher #2)",
+      "note": "Opt-B kept and merged: deep rooms (top row >60) get +1 foe. s1 foes0 146->105 foes0max 130->21 kills 2->3; s2 kills 1->3; s3 unchanged foes0=180 (bot camps one foe-less room, W3 owns climb-out). Opt-A discarded (no-op, s3 never finished). Probe prints removed before merge. Live re-gate all rc=0 0 errors incl. soak s1 foes0=100 kills 3. REPORT.md written; queue W2 done; active cleared."
+    },
+    {
+      "at": "2026-11-13T02:08:00-08:00",
+      "event": "W3 spawned (builder subagent, from main chat)",
+      "note": "w3-climb-out-comfort: guarantee climb-out path from deep rooms (map_gen only, stepped one-way platforms/ledges; seed 20261101 READY line must stay rooms=40/40 ore=138 spawn=(10,44) exit=(190,42) connected=true). W2 verified done: REPORT.md present, queue done, opt-B merged, live re-gate rc=0. 02:06 tick handed off per new rule, no tick spawn."
+    },
+    {
+      "at": "2026-11-13T03:09:00-08:00",
+      "event": "W3 builder resumed after interruption",
+      "note": "Builder interrupted 11:05 UTC mid-soak re-run (chain 3). Chain 2 scratch gates all rc=0 (selftest, p11 x3, load, sweep s2/s3, soak) but soak had no SOAK_DONE; chain 3 soak stopped t=100/180. Resumed from main chat (W1 precedent) with verified disk state; recovery note sent to finish soak, merge, re-gate, REPORT, settle."
+    },
+    {
+      "at": "2026-11-13T04:39:00-08:00",
+      "event": "W3 done (builder subagent): climb-out ledges in every corridor shaft, merged to live tree, re-gated green",
+      "note": "Ledges: map_gen records vertical legs, adds 1-row-apart alternating 2-wide one-way PLATFORMs (46 legs / 944 cells on seed 20261101); NO rng calls, READY line byte-identical (rooms 40/40 ore 138 spawn (10,44) exit (190,42) connected=true), sweep 20261102/20261104 both 40/40 connected. Probe PASS 10 rows on 3 seeds; soak climb 27 scratch / 36 live (gate >=10), stuck 5/7, rooms 3/4. REGRESSION FOUND AND FIXED IN-WAVE: ledges occupied spawn-chamber light cell + lantern test spot, failing Phase 7 (lantern_restored=false) and Phase 10 (embers 6 vs 12); rc=0 hid it, gate scripts now fail on any PASS=false. Fixes: chamber lights scan for a free row (game code), Phase 7 lantern test scans spots (test-only). Full evidence in loop/phases/w3-climb-out-comfort/REPORT.md. W4 next on the hourly tick."
+    },
+    {
+      "at": "2026-11-13T05:08:00-08:00",
+      "event": "W4 spawned (builder subagent, from main chat)",
+      "note": "w4-startup-smoothness: profile/smooth startup, no world-gen output change, READY line byte-identical on 3 seeds, load_ms before/after ranges. W3 verified done: ledges merged, gates rc=0 0 PASS=false, live soak climb 36. 05:06 tick handed off per new rule, no tick spawn."
+    },
+    {
+      "at": "2026-11-13T06:10:00-08:00",
+      "event": "W4 builder resumed after interruption",
+      "note": "Builder interrupted mid-verify after applying opt to scratch. Baseline verified green on disk (load_ms 2160/2231/1737, all gates rc=0 0 errors 0 PASS=false, READY byte-identical). w4-apply-opt.py written and applied to scratch main.gd (05:21 PST). Resumed from main chat (W1/W3 precedent) with verified disk state; recovery note sent to finish gates, merge, re-gate, REPORT, settle."
+    },
+    {
+      "at": "2026-11-13T06:42:00-08:00",
+      "event": "W4 done (builder subagent): startup smoothing merged to live tree, re-gated green",
+      "note": "Merged layers+edges single pass + props ore-scan fold-in + texture-load hoists + tileset convert-guard (main.gd only, 221212->229119 B; map_gen untouched). World byte-identical: --dump-layers diff clean on seeds 20261101/02/04 (21474/21902/21354 cells); READY line byte-identical (40/40 ore 138 spawn (10,44) exit (190,42) connected=true). load_ms plain launches: baseline 1737-2231 -> scratch after 1011-1209, live 1009-1513 (sandbox ranges, not phone numbers). Stage wins: layers+edges 448-522 -> 64-82 ms, props 366-396 -> 227-237 ms; awaits unchanged by design. Full suite all classes rc=0 0 errors 0 PASS=false on scratch AND live re-gate (tech 50->35, red 50->30, mage 50->38, P14 1.50/110.7). Recovery: opt was NOT actually applied at resume (verified by diff); fixed 4 assert bugs in w4-apply-opt.py, applied clean. Found+f fixed in-wave: gate scripts deleted the save before --selftest-load making it vacuous (FAIL no save in baseline too); proper selftest-then-load sequence on live PASS=true (pos/hp/ore true, Phase7/8 true). Full evidence in loop/phases/w4-startup-smoothness/REPORT.md. W5 next on the hourly tick."
+    },
+    {
+      "at": "2026-11-13T06:38:00-08:00",
+      "event": "W4 DONE, verified by main agent",
+      "note": "Merged render passes; world byte-identical (dump-layers diff clean, READY byte-identical); load_ms live 1009-1513 vs baseline 1737-2231; live re-gate all rc=0 0 errors 0 PASS=false; proper load test PASS=true. CORRECTION to the 06:10 recovery note: the opt was NOT already applied \u2014 the builder diff-verified scratch still had old functions (apply script had failed at asserts); it fixed 4 assert/anchor bugs and applied on attempt 3. Tick claim + mtime is not proof of application; diff first."
+    },
+    {
+      "at": "2026-11-13T07:08:00-08:00",
+      "event": "W5 spawned (builder subagent, from main chat)",
+      "note": "w5-animation-gaps: procedural-only animation gaps (ore-mimic 4th attack pose, tunnel-worm walk frame, red/mage fall/land); no new sprite generation. W4 verified done: world byte-identical, load_ms live 1009-1513, gates rc=0 0 PASS=false, proper load PASS=true. Deadline 08:05 PST (~55 min); builder told to report partial-but-honest if the full chain cannot finish, and never merge without a green live re-gate. W6/W7 remain pending and will not start before the deadline."
+    },
+    {
+      "time": "2026-11-13T07:38:00-08:00",
+      "event": "W5 DONE \u2014 merged, live re-gate FAIL=0 (6 steps rc=0 errors=0 passfalse=0); mimic attack 4/4 PROC, worm walk 3/3 PROC, red/mage fall/land verified reuse; READY byte-identical; load_ms live 1087-1395"
+    },
+    {
+      "at": "2026-11-13T08:07:00-08:00",
+      "event": "LOOP CLOSED at deadline 08:05 PST \u2014 final digest written, cron job disabled",
+      "note": "W5 finished 07:41 PST, ~24 min before deadline; W6 (long soak) and W7 (final verify + APK rebuild) never started and remain pending in queue.json. 5 of 7 waves done and merged, all live re-gated green. Digest: loop/DIGEST-2026-11-13.md. No live Godot process at close. Still needs Skit: orb-scale call, phone-feel verdicts, GitHub push (still 103f450a), APK re-upload (v1.1 link expired 2026-11-08), Game Off entry pick."
+    },
+    {
+      "at": "2026-11-13T17:22:00-08:00",
+      "event": "Loop resumed by Skit: Continue \u2014 fresh run of remaining waves W6/W7",
+      "note": "Loop closed 08:05 PST with W6/W7 pending; Skit said Continue 17:22 PST in side chat. W6 spawned from main chat (survives runtime restarts, unlike tick-spawned builders). Scope unchanged: DEEPFALL only, refine-only, local only, no push/publish/upload. W7 runs only after W6 is verified done."
+    },
+    {
+      "at": "2026-11-13T22:06:00-08:00",
+      "event": "W6 done (builder subagent): long-soak stability, one real bug found and fixed, merged to live tree, re-gated green",
+      "note": "Soaks (all rc=0, 0 SCRIPT ERRORs): S1 20261101 tech 600s deaths 0 stuck 27 kills 0 mined 6 rooms 4 foes0max 53 near0 600; S2 57109915 tech 600s deaths 0 stuck 29 kills 5 mined 47 rooms 4 foes0max 0; S3 91838678 tech 600s deaths 0 stuck 22 kills 6 mined 44 rooms 4 foes0max 68 (pre-fix map); S3-fix 91838678 tech 600s deaths 0 stuck 25 kills 5 mined 51 rooms 4 foes0max 6; S4 20261101 red 180s deaths 0 stuck 7 kills 0 mined 2 rooms 4 climb 36; S5 20261101 mage 180s deaths 0 stuck 5 kills 0 mined 0 rooms 3 climb 27. No foes=0 stretch over 120s in any run. BUG FOUND+F FIXED: seed 91838678 generated rooms=39/40 connected=false (room [180,76,14,10] unreachable; repair legs severed by exit-room brick floor + floor-guard SOLID re-fill). Fix in map_gen.gd only (~30 lines): repair corridor shifts its vertical leg to avoid the exit floor row and spawn anchor; diagnostic DEEPFALL_W6_UNREACHED kept as tripwire. Verified: 91838678 now 40/40 connected=true (ore 139 unchanged), 20261101 READY byte-identical, 5-seed sweep all 40/40 connected=true. Scratch gates + live re-gate all rc=0 errors=0 passfalse=0 (selftest, selftest-load PASS=true, p11 tech 50->35 / red 50->30 / mage 50->38, P14 1.50/110.7). Merge by explicit cp of map_gen.gd only; live-vs-scratch diff now shows only the KayKit additions (skeleton-warrior + chest, separate thread, live-only). Caveats: --selftest-p11 with NO --class stalls after READY in this sandbox (pre-existing, not W6; per-class gates green); sandbox fps 1-7 is not phone fps; soak bot is not a player model. Full evidence in loop/phases/w6-long-soak-stability/REPORT.md. W7 next, by the main agent only."
+    },
+    {
+      "at": "2026-11-13T22:27:00-08:00",
+      "event": "W6 verified by main agent; W7 spawned (builder subagent, from main chat)",
+      "note": "Independent check: live gate summary all 5 steps rc=0 errors=0 passfalse=0; READY seed 20261101 byte-identical; dumpmap 91838678 40/40 connected=true; SOAK_DONE lines match report (S1 stuck 27 kills 0, S3-fix stuck 25 kills 5); map_gen.gd carries W6 fix + W6_UNREACHED tripwire; 0 SCRIPT ERRORs in live-gate + soak logs. KayKit skeleton-warrior + chest present in live tree (separate thread). W7: full gates + APK rebuild, NO upload/link."
+    },
+    {
+      "at": "2026-11-13T22:42:00-08:00",
+      "event": "W7 DONE \u2014 loop CLOSED (resumed run complete, 7 of 7 waves)",
+      "note": "Full gate chain on live tree 6/6 green (selftest, selftest-load PASS=true, p11 tech 50->35 / red 50->30 / mage 50->38, P14 1.50/110.7, 180s soak deaths 0 stuck 5 kills 0 rooms 3 climb 27); all rc=0 errors=0 passfalse=0; READY seed 20261101 byte-identical. APK rebuilt: exports/deepfall-phase1-debug.apk 95793409 B sha dc8b7395...cdc1ea0, versionCode 3 / versionName 1.2, apksigner PASS (v2+v3, 1 signer); KayKit skeleton-warrior (15 frame imports) + chest (.import + .ctex) verified inside APK; export log 0 ERROR/Failed/missing. Old KayKit v1.2 build preserved as exports/deepfall-v1.2-kaykit-backup.apk (95772929 B, sha 8a3b8f2c...92b71). Nothing changed in this wave \u2014 no game/test code or assets modified. NOT uploaded, no link. Open: p11 no-class stall (harness, undiagnosed), in-game sighting of skeleton-warrior/chest unverified, orb-scale call, phone-feel verdicts, GitHub push (still 103f450a), APK re-upload, Game Off entry pick. Digest: loop/DIGEST-2026-11-14.md. Cron stays disabled."
+    },
+    {
+      "t": "2026-11-14T00:12:00-08:00",
+      "event": "ROUND 2 opened on Skit's 'Continue improvements' (2026-11-14 00:10 PST): W8 selftest-p11 stall diagnosis spawned from main chat; scope unchanged (DEEPFALL only, refine-only, local, no push/publish/upload)"
+    },
+    {
+      "at": "2026-11-14T00:52:00-08:00",
+      "event": "W8 done (builder subagent): --selftest-p11 no-class stall diagnosis",
+      "note": "Stall does not reproduce: 8/8 varied no-class runs pass on scratch (class arg, seed 91838678, deep/low-hp saves, pre-fix 39/40 map, mage save, hp-1 death-force, exit-cell card-force), all EXIT 0, 0 SCRIPT ERRORs; physics_frame proven to fire while paused, so no pause deadlock exists in the pre-P13 path. Likely cause of the 2026-11-13 stalls: transient sandbox contention (A/B load_ms=5905 vs 1663-3652 this wave). REAL harness bug found+fixed: stale run-card state (_card_pending/_card_reason surviving _rebuild_world) corrupts the P11 section silently \u2014 run F2: 12 failed expectations, EXIT 0, no verdict line. Fix in main.gd _run_selftest_p11 (live 4641-4657): close open card, clear _card_pending/_card_reason/_respawn_timer, player.dead=false. FAIL-pre F2 -> PASS-post F2fix (identical command/launch state, all 12 checks green). Live gates 6/6 green: selftest, selftest-load, p11 tech/red/mage/noclass (sword 50->35/30/38/35, P14 1.50/110.7). Gate lesson: p11 prints no PASS verdict \u2014 future gates need value checks, not just rc. Pre-W8 save restored. No cron re-enabled, nothing pushed/uploaded. Report: loop/phases/w8-selftest-p11-stall-diagnosis/REPORT.md"
+    },
+    {
+      "t": "2026-11-14T06:22:00-08:00",
+      "event": "W9 opened on Skit's widget tap 'Run W9 next: card-state hardening plus docs refresh' (2026-11-14 06:21 PST); scope unchanged (DEEPFALL only, refine-only, local, no push/publish/upload)"
+    },
+    {
+      "at": "2026-11-14T06:55:00-08:00",
+      "event": "W9 done (builder subagent): _rebuild_world card-state hardening + docs refresh, merged to live tree, re-gated green",
+      "note": "Part A: _rebuild_world now clears _card_pending/_card_reason/_card_open/_respawn_timer/player.dead at entry (main.gd 558-577, 16 lines). FAIL-pre 3-arm probe (exit-force save seed 91838678): armA stale extract card opened in fresh world, armB stale respawn timer fired, armC dead player stayed dead. PASS-post 3/3 (armA pending=0.00 open=false, armB timer=0.00 no respawn, armC dead=false dx=45.7). Subsumption proven: W8 F2 repro passes with the suite-entry clear removed (12/12 anchors); the clear is KEPT as defense in depth. Death regression green: death card opens (true/true/death), close -> respawned at spawn hp=100, extract card opens. Live gates 6/6 (selftest 2131, load 1384, p11 tech 1382/red 1533/mage 1853/noclass 2182; sword 50->35/30/38/35, P14 1.50/110.7), all rc=0 errors=0 passfalse=0, READY byte-identical. Part B: PHASE1-README.md +131 (Phase 11-14/beta/W1-W9 appendix), README.md +52, staging MANIFEST.md +46 (status since 2026-11-03), ANIMATIONS.md +19 (live-game addendum) \u2014 additions only. Pre-wave save restored. No cron re-enabled, nothing pushed/uploaded. Report: loop/phases/w9-card-state-hardening-docs-refresh/REPORT.md"
+    }
+  ],
+  "started": "2026-11-12T20:05:00-08:00"
+}

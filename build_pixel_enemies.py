@@ -367,6 +367,13 @@ def death_frames(slug, idle):
             lidr = lid.rotate([10, 25, 45, 60][k - 1], expand=True)
             f.alpha_composite(lidr if k < 4 else _dissolve(lidr, 0.4, 13), (min(W - lidr.width, lx + k * 2), max(0, ly)))
             frames.append(f)
+    elif slug in ("skeleton-warrior", "grave-revenant", "ash-wraith", "skeleton-rogue"):
+        # KayKit bake (2026-11-13): slumps like the ghoul — knees buckle,
+        # collapses into a heap. Same motion as miner-ghoul, own dissolve seed.
+        # Chunk 1 (2026-11-14): the two staged undead share the slump.
+        for k, (sy, rot) in enumerate([(0.9, -15), (0.85, -45), (0.8, -80), (0.75, -90)]):
+            f = _crop_alpha(_squash(body, 1.0, sy).rotate(rot, expand=True))
+            frames.append(_bottom(f if k < 3 else _dissolve(f, 0.35, 5), W, H))
     else:  # tunnel-worm
         # thrashes, then burrows down into the floor
         for k in range(1, 5):

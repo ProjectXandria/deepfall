@@ -28,11 +28,20 @@ nothing in staging was modified). Rebuild: `build_phase5_assets.py` in the game 
 | cave-spider | 663x256 | 4 | multiframe/mines-walk-v2 (spider 0–3) | 4 | multiframe/cave-spider-attack-redo (0–3) | enemies/mines/full/cave-spider.png |
 | ore-mimic | 462x256 | 4 | multiframe/mines-walk (mimic 0–3, top-cropped, see note) | **3** | multiframe/ore-mimic-attack-v2 (0–2) | enemies/mines/full/ore-mimic.png |
 | tunnel-worm | 893x256 | **2** | multiframe/mines-walk (worm 0, 3 only, top-cropped, see note) | 4 | multiframe/tunnel-worm-attack-v2 (0–3) | enemies/mines/full/tunnel-worm.png |
+| skeleton-warrior | 259x256 | 4 | KayKit bake (see note) | 4 | KayKit bake (see note) | KayKit bake (see note) |
+| grave-revenant | 289x256 | 4 | multiframe/grave-revenant-walk-v2 (0–3) | 4 | multiframe/grave-revenant-attack-v2 (0–3) | enemies/ember-hollow/full/grave-revenant.png |
+| ash-wraith | 373x256 | 4 | multiframe/ash-wraith-walk-v2 (0–3) | 4 | multiframe/ash-wraith-attack-redo (0–3) | enemies/ember-hollow/full/ash-wraith.png |
+| skeleton-rogue | 191x256 | 4 | KayKit bake (see note) | 4 | KayKit bake (see note) | KayKit bake (see note) |
 
 Scales applied (walk / attack / idle): bat 1.000 / 0.341 / 0.610;
 ghoul 1.053 / 0.324 / 0.560; golem 0.992 / 0.433 / 0.554;
 spider 1.524 / 0.688 / 0.721; mimic 1.778 / 0.425 / 0.632;
 worm 2.048 / 0.453 / 0.886.
+Chunk 1 (2026-11-14): revenant / wraith hi-res sets follow the same
+convention (per-set tallest 256px, NEAREST, common canvas bottom-centre);
+their game-size sets are LANCZOS downscales to 26px tall in
+assets/enemies_px/ (KayKit-bake precedent), not NEAREST — see
+build_chunk1_enemies.py.
 
 Files per enemy: `walk_0.png … walk_N.png`, `attack_0.png … attack_N.png`,
 `idle.png` (single-pose sprite, trimmed to content bbox, scaled to 256px tall).
@@ -64,7 +73,54 @@ Files per enemy: `walk_0.png … walk_N.png`, `attack_0.png … attack_N.png`,
 - **cave-spider-attack-v2 NOT used** — it is partial (frames 1–2 only).
   `cave-spider-attack-redo` (4 frames) was used instead.
 
-## Player melee (`assets/player_anim/melee_0..3.png`)
+## KayKit skeleton-warrior bake (2026-11-13, CC0)
+
+- Source: `~/workspace/asset-pipeline/staging/deepfall/kaykit-skeletons/`
+  (`Skeleton_Warrior.glb` + `Skeleton_Blade.gltf`, blade parented to
+  `handslot.r`). Baked in Blender 4.2.3 headless (Cycles CPU, 8 samples,
+  orthographic side view from −Y, transparent film).
+- Clips used (all real clips from the GLB, no invented frames):
+  walk = `Walking_A_Rig` frames 0/7/13/20; attack =
+  `1H_Melee_Attack_Chop_Rig` frames 2/9/16/23; idle = `Idle_Rig` frame 13.
+- Hi-res sets in `assets/enemies/skeleton-warrior/`: per-set tallest =
+  256px, NEAREST, bottom-centre — walk canvas 221x256, attack 259x256,
+  idle 218x256.
+- **The game loads `assets/enemies_px/`, not this folder.** The in-game
+  frames in `assets/enemies_px/skeleton-warrior/` are the same renders
+  NEAREST-downscaled per set to 26px tallest on one common 28x27 canvas,
+  with the Phase 12 1px dark outline, plus `death_0..5.png` from the
+  slump branch in `build_pixel_enemies.py` (same motion as miner-ghoul).
+  Bake scripts: `/tmp/bake_warrior.py`, `/tmp/normalize_warrior.py`.
+- STATS (`scripts/enemy.gd`): hp 25, speed 80, damage 8, aggro 280,
+  range 56, half_w 12 (body, not the sword), half_h 32, walk 4, attack 4.
+  Spawn: added to `ENEMY_SLUGS` in `scripts/main.gd` (uniform pick, 1/7).
+
+## KayKit skeleton-rogue bake (2026-11-14, CC0, Chunk 1)
+
+- Source: same KayKit pack (`Skeleton_Rogue.glb` +
+  `Skeleton_Crossbow.gltf`, crossbow parented to `handslot.r` — visual
+  only, the AI is melee). Baked in Blender 4.2.3 headless (Cycles CPU,
+  32 samples, orthographic side view from −Y, transparent film).
+  Bake script: `bake_rogue.py` in the project root; post-process:
+  `bake_rogue_post.py`.
+- Clips used (all real clips from the GLB, no invented frames):
+  walk = `Walking_A_Rig` frames 0/7/13/20; attack =
+  `1H_Melee_Attack_Stab_Rig` frames 2/13/24/35; idle = `Idle_Rig`
+  frame 13. Gotcha: the GLB imports the rig with rotation_mode
+  QUATERNION, so `rotation_euler` sets are no-ops — the bake script
+  sets `rotation_mode = 'XYZ'` first, then rotates -90 deg about Z so
+  the profile faces screen-left like the warrior.
+- Hi-res sets in `assets/enemies/skeleton-rogue/`: per-set tallest =
+  256px, NEAREST, bottom-centre — all sets on a common 191x256 canvas.
+- **The game loads `assets/enemies_px/`, not this folder.** The in-game
+  frames in `assets/enemies_px/skeleton-rogue/` are the same renders
+  LANCZOS-downscaled to 26px tallest on one common 19x26 canvas, with
+  the Phase 12 1px dark outline, plus `death_0..5.png` from the slump
+  branch in `build_pixel_enemies.py`.
+- STATS (`scripts/enemy.gd`): hp 15, speed 140, damage 6, aggro 320,
+  range 52, half_w 12 (body, not the crossbow), half_h 32, walk 4,
+  attack 4. Spawn: added to `ENEMY_SLUGS` in `scripts/main.gd`
+  (uniform pick, 1/10).
 
 - Source: `multiframe/tech-melee-v2/` (tech-soldier 0–3), 4 frames.
 - The existing player convention (common 256x195 canvas at 0.5 scale) does

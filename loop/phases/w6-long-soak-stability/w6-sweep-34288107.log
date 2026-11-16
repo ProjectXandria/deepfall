@@ -1,0 +1,62 @@
+Godot Engine v4.8.beta1.official.4d10419ca - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 20.1.2, 256 bits)
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+ALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory
+ALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default
+ERROR: Condition "status < 0" is true. Returning: ERR_CANT_OPEN
+   at: init_output_device (drivers/alsa/audio_driver_alsa.cpp:97)
+WARNING: All audio drivers failed, falling back to the dummy driver.
+     at: initialize (servers/audio/audio_driver.cpp:244)
+
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1602)
+     GDScript backtrace (most recent call first):
+         [0] _layout (res://scripts/touch_ui.gd:242)
+         [1] _ready (res://scripts/touch_ui.gd:168)
+DEEPFALL_W3_LEDGES legs=45 cells=1053
+DEEPFALL_ENEMY_SPAWNS total=27
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=79 skipped_broken=0
+ERROR: No loader found for resource: res://assets/enemies_px/tunnel-worm/walk_2.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:108)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _refresh_enemies_for_chunks (res://scripts/main.gd:1070)
+       [3] _apply_chunk_visibility (res://scripts/main.gd:957)
+       [4] _rebuild_world (res://scripts/main.gd:650)
+DEEPFALL_CHUNK stream=(0, 4) loaded=6/78
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_PHASE1_READY seed=34288107 rooms=40/40 ore_veins=104 spawn=(7, 70) exit=(191, 73) connected=true load_ms=1465
+DEEPFALL_CLASS_SELECT_SHOWN
+DEEPFALL_W3_LEDGES legs=45 cells=1053
+DEEPFALL_ENEMY_SPAWNS total=27
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=79 skipped_broken=0
+ERROR: No loader found for resource: res://assets/enemies_px/tunnel-worm/walk_2.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:108)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _refresh_enemies_for_chunks (res://scripts/main.gd:1070)
+       [3] _apply_chunk_visibility (res://scripts/main.gd:957)
+       [4] _rebuild_world (res://scripts/main.gd:650)
+       [5] _ready (res://scripts/main.gd:470)
+       [6] _rebuild_world (res://scripts/main.gd:655)
+DEEPFALL_CHUNK stream=(0, 4) loaded=6/78
+MAP_ROOMS [[2, 65, 11, 7], [5, 10, 16, 8], [5, 78, 12, 6], [12, 45, 11, 10], [15, 34, 8, 7], [19, 21, 8, 8], [22, 70, 13, 6], [26, 51, 10, 8], [33, 20, 10, 8], [34, 33, 16, 10], [46, 18, 11, 9], [47, 50, 15, 6], [55, 29, 14, 8], [57, 2, 14, 6], [57, 71, 15, 6], [68, 44, 12, 9], [76, 59, 8, 6], [81, 71, 10, 8], [83, 27, 12, 8], [85, 42, 16, 7], [88, 60, 8, 8], [95, 74, 9, 8], [97, 4, 16, 6], [107, 73, 11, 8], [114, 25, 9, 9], [115, 4, 10, 8], [118, 40, 14, 9], [120, 61, 8, 8], [126, 76, 14, 9], [127, 28, 16, 7], [137, 62, 15, 10], [142, 46, 9, 6], [150, 4, 15, 9], [159, 76, 11, 10], [161, 62, 15, 10], [165, 37, 15, 7], [167, 52, 15, 7], [168, 14, 15, 9], [182, 31, 15, 6], [187, 66, 8, 9]]
+MAP_LEGS [[13, 14, 68], [11, 68, 81], [17, 50, 68], [19, 37, 50], [23, 25, 37], [28, 68, 73], [31, 50, 55], [38, 24, 25], [42, 24, 38], [51, 22, 24], [54, 53, 55], [62, 22, 33], [64, 5, 22], [64, 53, 74], [74, 48, 53], [80, 48, 62], [86, 62, 75], [89, 31, 33], [93, 31, 45], [92, 62, 64], [99, 75, 78], [105, 7, 31], [112, 77, 78], [118, 29, 31], [120, 7, 8], [125, 29, 44], [124, 44, 65], [133, 65, 80], [135, 29, 31], [144, 65, 67], [146, 49, 67], [157, 8, 8], [164, 80, 81], [168, 67, 81], [172, 40, 67], [174, 55, 67], [175, 18, 40], [189, 34, 40], [191, 67, 70], [38, 24, 74], [38, 24, 65], [125, 34, 44], [172, 40, 70], [146, 18, 49], [11, 29, 81]]
+MAP_SPAWN (7, 70) MAP_EXIT (191, 73)
+WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2609)
+ERROR: 3 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

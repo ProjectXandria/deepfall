@@ -1,0 +1,613 @@
+Godot Engine v4.8.beta1.official.4d10419ca - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 20.1.2, 256 bits)
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+ALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory
+ALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default
+ERROR: Condition "status < 0" is true. Returning: ERR_CANT_OPEN
+   at: init_output_device (drivers/alsa/audio_driver_alsa.cpp:97)
+WARNING: All audio drivers failed, falling back to the dummy driver.
+     at: initialize (servers/audio/audio_driver.cpp:244)
+
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1602)
+     GDScript backtrace (most recent call first):
+         [0] _layout (res://scripts/touch_ui.gd:242)
+         [1] _ready (res://scripts/touch_ui.gd:168)
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1286
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SELFTEST enemy_hp_after_player_hit=5 (ghoul max 20, expect 5)
+DEEPFALL_SELFTEST player_hp_after_enemy_hit=92 (expect 92)
+DEEPFALL_DROP slug=miner-ghoul item=stone n=1
+DEEPFALL_ENEMY_SLAIN slug=miner-ghoul remaining=26
+DEEPFALL_LOG Slain miner-ghoul
+DEEPFALL_SAVE_SAVED reason=kill mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST kills=1 foes_remaining=26 (expect 1, 26)
+DEEPFALL_SELFTEST_PHASE6 start
+DEEPFALL_SAVE_SAVED reason=mine mined=0 cracked=1 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=1 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE6 a cell=(6, 45) cracked_first=true mined=true layer_erased=true
+ERROR: No loader found for resource: res://assets/enemies_px/ore-mimic/attack_3.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:110)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _refresh_enemies_for_chunks (res://scripts/main.gd:1070)
+       [3] _apply_chunk_visibility (res://scripts/main.gd:957)
+       [4] _run_selftest_phase6 (res://scripts/main.gd:1415)
+       [5] _run_selftest (res://scripts/main.gd:1378)
+DEEPFALL_CHUNK stream=(4, 0) loaded=6/78
+DEEPFALL_SELFTEST_PHASE6 a2 left_chunk old_chunk=26 unloaded=true far_chunk_loaded=true fg_still_mined=true
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_SELFTEST_PHASE6 a3 returned still_mined=true chunk_visible=true layer_erased=true
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+ERROR: No loader found for resource: res://assets/enemies_px/ore-mimic/attack_3.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:110)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _refresh_enemies_for_chunks (res://scripts/main.gd:1070)
+       [3] _apply_chunk_visibility (res://scripts/main.gd:957)
+       [4] _run_selftest_phase6 (res://scripts/main.gd:1441)
+       [5] _run_selftest (res://scripts/main.gd:1378)
+DEEPFALL_CHUNK stream=(1, 2) loaded=9/78
+DEEPFALL_CHUNK stream=(1, 2) loaded=9/78
+DEEPFALL_SELFTEST_PHASE6 c legacy_chunk 0->1 (expect 0->1) stream (0, 2)->(1, 2) (expect (0,2)->(1,2)) stream_at_16.5=(1, 2)
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_TORCH_PLACED cell=(9, 44) held=2
+DEEPFALL_SAVE_SAVED reason=selftest mined=1 cracked=0 torches=1 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_SAVE_LOADED mined=1 cracked=0 torches=1 slain=0 ore=0 pos=(672.0, 2848.0) hp=92 class=tech inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_SELFTEST_PHASE6 b reload mined_still_air=true torch_cell=(9, 44) torch_restored=true pos_restored=true hp=92 ore=0
+DEEPFALL_SELFTEST_PHASE6 done a=true a3=true c_legacy=true c_stream=true b=true
+DEEPFALL_SELFTEST_PHASE7 start
+DEEPFALL_SELFTEST_PHASE7 cells coal=(85, 0) wood=(88, 1) sand=(0, 0) gold=(40, 4)
+DEEPFALL_SAVE_SAVED reason=mine mined=1 cracked=1 torches=1 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_ORE_COLLECTED type=13 name=Coal ore coal=1
+DEEPFALL_LOG Picked up Coal ore
+DEEPFALL_SAVE_SAVED reason=mine mined=2 cracked=0 torches=1 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=2 cracked=1 torches=1 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=3 cracked=0 torches=1 slain=0 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=3 cracked=1 torches=1 slain=0 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=0 torches=1 slain=0 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 1, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=4 cracked=1 torches=1 slain=0 ore=0 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 0, "amber": 0, "sand": 1, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_ORE_COLLECTED type=4 name=Gold ore total=1
+DEEPFALL_LOG Picked up Gold ore
+DEEPFALL_SAVE_SAVED reason=mine mined=5 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 1, "gold": 1, "amber": 0, "sand": 1, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE7 a mined coal+1 wood+1 sand+1 gold+1 (expect 1,1,1,1)
+DEEPFALL_LOG Crafted Torch.
+DEEPFALL_CRAFTED id=torch inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 1, "glass": 0, "lantern": 0, "workbench": 0 } torches=3
+DEEPFALL_SAVE_SAVED reason=craft mined=5 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 1, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE7 b torch craft=true torches 2->3 wood 1->0 coal 1->0 (expect true, +1, -1, -1)
+DEEPFALL_SAVE_SAVED reason=mine mined=5 cracked=1 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 1, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=6 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 2, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOG Crafted Glass block.
+DEEPFALL_CRAFTED id=glass inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } torches=3
+DEEPFALL_SAVE_SAVED reason=craft mined=6 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE7 b2 glass craft=true glass=1 sand=0 (expect true, 1, 0)
+DEEPFALL_LOG Lantern needs a workbench within 3 tiles — place one with B first.
+DEEPFALL_CRAFT_FAIL id=lantern reason=needs_workbench
+DEEPFALL_SELFTEST_PHASE7 c lantern without bench craft=false lantern=0 (expect false, 0)
+DEEPFALL_SAVE_SAVED reason=mine mined=6 cracked=1 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=7 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=7 cracked=1 torches=1 slain=0 ore=1 inv={ "wood": 1, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=8 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 2, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=8 cracked=1 torches=1 slain=0 ore=1 inv={ "wood": 2, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=9 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 3, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=9 cracked=1 torches=1 slain=0 ore=1 inv={ "wood": 3, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 4, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOG Crafted Workbench.
+DEEPFALL_CRAFTED id=workbench inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 1 } torches=3
+DEEPFALL_SAVE_SAVED reason=craft mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 1 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE7 c2 workbench craft=true held=1 wood=0 (expect true, 1, 0)
+DEEPFALL_WORKBENCH_PLACED cell=(9, 44) held=0
+DEEPFALL_LOG Placed workbench
+DEEPFALL_SAVE_SAVED reason=workbench mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 1, "amber": 0, "sand": 0, "glass": 1, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=1
+DEEPFALL_SELFTEST_PHASE7 c3 workbench placed=true near=true (expect true, true)
+DEEPFALL_LOG Crafted Lantern.
+DEEPFALL_CRAFTED id=lantern inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 1, "workbench": 0 } torches=2
+DEEPFALL_SAVE_SAVED reason=craft mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 1, "workbench": 0 } lanterns=0 workbenches=1
+DEEPFALL_SELFTEST_PHASE7 c4 lantern near bench craft=true lantern=1 gold=0 glass=0 torches=2 (expect true, 1, 0, 0, 2)
+DEEPFALL_LOG No place to hang/set a lantern here — need solid above or below.
+DEEPFALL_LANTERN_NOSPACE
+DEEPFALL_LOG No place to hang/set a lantern here — need solid above or below.
+DEEPFALL_LANTERN_NOSPACE
+DEEPFALL_LOG No place to hang/set a lantern here — need solid above or below.
+DEEPFALL_LANTERN_NOSPACE
+DEEPFALL_LOG No place to hang/set a lantern here — need solid above or below.
+DEEPFALL_LANTERN_NOSPACE
+DEEPFALL_LANTERN_PLACED cell=(9, 44) held=0
+DEEPFALL_LOG Placed lantern
+DEEPFALL_SAVE_SAVED reason=lantern mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SELFTEST_PHASE7 d lantern placed cell=(9, 44) bench cell=(9, 44) (expect both valid)
+DEEPFALL_SAVE_SAVED reason=selftest7 mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_SAVE_LOADED mined=10 cracked=0 torches=1 slain=0 ore=1 pos=(608.0, 2848.0) hp=92 class=tech inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_SELFTEST_PHASE7 d reload inv_same=true lantern_restored=true workbench_restored=true torches=2 (expect true, true, true, 2)
+DEEPFALL_SAVE_SAVED reason=selftest7 mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SELFTEST_PHASE7 done PASS=true
+DEEPFALL_SELFTEST_PHASE8 start
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_SELFTEST_PHASE8 a class=tech hp=100 melee=15 speed=1.00 ranged=false idle_path=res://assets/player_anim/idle_0.png leak=false stats_ok=true counts_ok=true
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+DEEPFALL_SELFTEST_PHASE8 a class=red hp=120 melee=20 speed=0.90 ranged=false idle_path=res://assets/player_anim/red/idle_0.png leak=false stats_ok=true counts_ok=true
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_SELFTEST_PHASE8 a class=mage hp=80 melee=10 speed=1.00 ranged=true idle_path=res://assets/player_anim/mage/idle_0.png leak=false stats_ok=true counts_ok=true
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_SELFTEST_PHASE8 c mage_shoot_frames=5 (expect 5) bad_frame_file_exists=false (expect false)
+DEEPFALL_LOG Tool: Sword
+DEEPFALL_ORB_FIRED facing=1
+DEEPFALL_SELFTEST_PHASE8 orb fired=true ghoul_hp=8 (expect true, 8)
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+DEEPFALL_DROP slug=miner-ghoul item=stone n=1
+DEEPFALL_ENEMY_SLAIN slug=miner-ghoul remaining=26
+DEEPFALL_LOG Slain miner-ghoul
+DEEPFALL_SAVE_SAVED reason=kill mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_DROP slug=miner-ghoul item=stone n=1
+DEEPFALL_ENEMY_SLAIN slug=miner-ghoul remaining=26
+DEEPFALL_LOG Slain miner-ghoul
+DEEPFALL_SAVE_SAVED reason=kill mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SELFTEST_PHASE8 red_melee ghoul2_hp=0 (expect 0)
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+DEEPFALL_SAVE_SAVED reason=selftest8 mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_SAVE_LOADED mined=10 cracked=0 torches=1 slain=0 ore=1 pos=(608.0, 2848.0) hp=120 class=red inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_SELFTEST_PHASE8 d class=red restored=true hp=120/120 (expect true, 120/120)
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_SAVE_SAVED reason=selftest8 mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_SAVE_LOADED mined=10 cracked=0 torches=1 slain=0 ore=1 pos=(608.0, 2848.0) hp=80 class=mage inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_SELFTEST_PHASE8 d class=mage restored=true hp=80/80 (expect true, 80/80)
+DEEPFALL_SAVE_SAVED reason=selftest8 mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SELFTEST_PHASE8 done PASS=true
+DEEPFALL_SELFTEST_PHASE9 start
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SELFTEST_PHASE9 hud line1_px=195 line2_px=865 (expect both < 1248)
+DEEPFALL_SELFTEST_PHASE9 tiles transition_cells=338 corner_cells=134 (expect both > 0)
+ERROR: No loader found for resource: res://assets/enemies_px/ore-mimic/attack_3.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:110)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _refresh_enemies_for_chunks (res://scripts/main.gd:1070)
+       [3] _apply_chunk_visibility (res://scripts/main.gd:957)
+       [4] _process (res://scripts/main.gd:2417)
+ERROR: No loader found for resource: res://assets/enemies_px/ore-mimic/attack_3.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:110)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _refresh_enemies_for_chunks (res://scripts/main.gd:1070)
+       [3] _apply_chunk_visibility (res://scripts/main.gd:957)
+       [4] _process (res://scripts/main.gd:2417)
+ERROR: No loader found for resource: res://assets/enemies_px/ore-mimic/attack_3.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:110)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _refresh_enemies_for_chunks (res://scripts/main.gd:1070)
+       [3] _apply_chunk_visibility (res://scripts/main.gd:957)
+       [4] _process (res://scripts/main.gd:2417)
+DEEPFALL_CHUNK stream=(3, 1) loaded=9/78
+DEEPFALL_SAVE_SAVED reason=chunk mined=10 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SELFTEST_PHASE9 parallax cam_dx=2368.0 far_dx=1539.2 (0.65x) mid_dx=828.8 (0.35x) (expect far 0.65x, mid 0.35x of camera)
+DEEPFALL_SELFTEST_PHASE9 physics single_jump height_px=121.4 tiles=1.90 air_frames=45 air_s=0.75 (theory 113.8px/1.78 tiles/40 frames/0.67s) land_timer=0.113 (expect ~0.133)
+DEEPFALL_SELFTEST_PHASE9 physics double_jump height_px=218.5 tiles=3.41 double_fired=true (expect ~200px/3.1 tiles/true)
+DEEPFALL_SELFTEST_PHASE9 physics coyote left_after_frames=13 vel_y=-640 (expect -640: jump fired inside the 0.12s window)
+DEEPFALL_SELFTEST_PHASE9 physics jump_buffer double_used=true pressed=true fired_within_frames=1 (expect true, true, <=3)
+DEEPFALL_SELFTEST_PHASE9 platform single_jump min_feet_vs_plat_top=+70.6 land_feet=1216.0 (expect feet stay below the top, i.e. +85, and land back on the floor 1216)
+DEEPFALL_SELFTEST_PHASE9 platform double_jump min_feet_vs_plat_top=-34.9 land_feet=1024.0 on_ground=true (expect feet pass above the top, land feet == plat top 1024)
+DEEPFALL_SELFTEST_PHASE9 platform drop_through fired=true land_feet=1216.0 (expect true, 1216 = the floor below)
+DEEPFALL_SELFTEST_PHASE9 collision wall right_edge=5951.99 wall_left=5952 vel_x=0.0 (expect right edge <= wall left + 0.5, vel_x 0)
+DEEPFALL_SAVE_SAVED reason=mine mined=10 cracked=1 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SAVE_SAVED reason=mine mined=11 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 2, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SELFTEST_PHASE9 collision mine_floor feet_before=447 feet_after=511 on_ground=true (expect +64, true)
+DEEPFALL_SELFTEST_PHASE9 collision knockback dx=17.99 right_edge=5951.99 wall_left=5952 (expect dx > 1, no penetration)
+DEEPFALL_SELFTEST_PHASE9 collision bottom_row y=5208.0 on_ground=true (expect y < 5760, true)
+DEEPFALL_SELFTEST_PHASE9 enemy slug=cave-bat-swarm walk_frames_seen=9 attack_started=true attack_frames_seen=true (ore-mimic walk is 1 by design: ambush, wander=false)
+DEEPFALL_SELFTEST_PHASE9 enemy slug=miner-ghoul walk_frames_seen=9 attack_started=true attack_frames_seen=true (ore-mimic walk is 1 by design: ambush, wander=false)
+DEEPFALL_SELFTEST_PHASE9 enemy slug=rock-golem walk_frames_seen=9 attack_started=true attack_frames_seen=true (ore-mimic walk is 1 by design: ambush, wander=false)
+DEEPFALL_SELFTEST_PHASE9 enemy slug=cave-spider walk_frames_seen=4 attack_started=true attack_frames_seen=true (ore-mimic walk is 1 by design: ambush, wander=false)
+ERROR: No loader found for resource: res://assets/enemies_px/ore-mimic/attack_3.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:110)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _run_selftest_phase9 (res://scripts/main.gd:3826)
+DEEPFALL_SELFTEST_PHASE9 enemy slug=ore-mimic walk_frames_seen=5 attack_started=true attack_frames_seen=true (ore-mimic walk is 1 by design: ambush, wander=false)
+ERROR: No loader found for resource: res://assets/enemies_px/tunnel-worm/walk_2.png (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+   GDScript backtrace (most recent call first):
+       [0] setup (res://scripts/enemy.gd:108)
+       [1] _spawn_one (res://scripts/main.gd:1077)
+       [2] _run_selftest_phase9 (res://scripts/main.gd:3826)
+DEEPFALL_SELFTEST_PHASE9 enemy slug=tunnel-worm walk_frames_seen=3 attack_started=true attack_frames_seen=true (ore-mimic walk is 1 by design: ambush, wander=false)
+DEEPFALL_SELFTEST_PHASE9 enemy bat hover_y_range=19.2 (expect <= 41, i.e. +-20 clamp) dx=-135.0 (expect != 0: it wanders) on_ground=false (expect false)
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PLAYER_DIED
+DEEPFALL_SELFTEST_PHASE9 anim dying class=tech hidden_at_end=true (expect true)
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+DEEPFALL_PLAYER_DIED
+DEEPFALL_SELFTEST_PHASE9 anim dying class=red hidden_at_end=true (expect true)
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_PLAYER_DIED
+DEEPFALL_SELFTEST_PHASE9 anim dying class=mage hidden_at_end=true (expect true)
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_SELFTEST_PHASE9 anim crouch active=true leg_rot=-0.90 speed_while_crouched=135 (expect true, < -0.5, 135 = half of 270)
+DEEPFALL_SELFTEST_PHASE9 anim thruster double_jumped=true (expect true)
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_SELFTEST_PHASE9 anim landing class=tech land_timer=0.113 squashed=true (expect > 0, true)
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+DEEPFALL_SELFTEST_PHASE9 anim landing class=red land_timer=0.113 squashed=true (expect > 0, true)
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_SELFTEST_PHASE9 anim landing class=mage land_timer=0.113 squashed=true (expect > 0, true)
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_LOG Tool: Sword
+DEEPFALL_ORB_FIRED facing=1
+DEEPFALL_SELFTEST_PHASE9 orb fired=true trail_dots_after_6_steps=6 impact_spawned=1 fx_left_after_0.3s=0 (expect true, >=4, 1, 0)
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SAVE_SAVED reason=mine mined=11 cracked=1 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 2, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SAVE_SAVED reason=mine mined=12 cracked=0 torches=1 slain=0 ore=1 inv={ "wood": 0, "stone": 3, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=1 workbenches=1
+DEEPFALL_SELFTEST_PHASE9 tiles transition_rederive cell=(1, 4) special_before=21 special_after=-1 changed=true (expect true)
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_SELFTEST_PHASE9 rig_fall_land class=tech fall_leg_rot=-0.25 land_scale_y=2.64 (expect |rot|>0.05, sy<2.9)
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+DEEPFALL_SELFTEST_PHASE9 rig_fall_land class=red fall_leg_rot=-0.31 land_scale_y=2.64 (expect |rot|>0.05, sy<2.9)
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_SELFTEST_PHASE9 rig_fall_land class=mage fall_leg_rot=-0.36 land_scale_y=2.64 (expect |rot|>0.05, sy<2.9)
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_SAVE_SAVED reason=selftest9 mined=0 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE9 done PASS=true
+DEEPFALL_SELFTEST_PHASE9B start
+DEEPFALL_SELFTEST_PHASE9B plugin_class_exists=true (expect true)
+DEEPFALL_SELFTEST_PHASE9B orb_res_null=false poof_res_null=false (expect false false)
+DEEPFALL_SELFTEST_PHASE9B emitters_created=[true, true] (expect true true)
+DEEPFALL_SELFTEST_PHASE9B duration orb=0.6667 (expect 0.6667) poof=1.0000 (expect 1.0000)
+DEEPFALL_LOOT_COLLECTED item=stone n=1 total=1
+DEEPFALL_LOOT_COLLECTED item=stone n=1 total=2
+DEEPFALL_LOOT_COLLECTED item=stone n=1 total=3
+DEEPFALL_SELFTEST_PHASE9B emitters_alive_after_90_frames=0 (expect 0)
+DEEPFALL_SELFTEST_PHASE9B done PASS=true
+DEEPFALL_SELFTEST_PHASE10 start
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_LOG Tool: Sword
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_LOG Tool: Sword
+DEEPFALL_SELFTEST_PHASE10 a tool_cycle=true to_pickaxe=true to_sword=true (expect true true true)
+DEEPFALL_LOG Need pickaxe to mine
+DEEPFALL_SELFTEST_PHASE10 b sword_mine_blocked=true log=Need pickaxe to mine (expect true 'Need pickaxe to mine')
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_SAVE_SAVED reason=mine mined=0 cracked=1 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SAVE_SAVED reason=mine mined=1 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE10 c pickaxe_mined=true ore_before=0 ore_after=0 type=3
+DEEPFALL_SELFTEST_PHASE10 d pickaxe_dmg ghoul_hp=15 (expect 15)
+DEEPFALL_DROP slug=miner-ghoul item=stone n=1
+DEEPFALL_ENEMY_SLAIN slug=miner-ghoul remaining=26
+DEEPFALL_LOG Slain miner-ghoul
+DEEPFALL_SAVE_SAVED reason=kill mined=1 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_LOG Tool: Sword
+DEEPFALL_SELFTEST_PHASE10 d sword_dmg ghoul_hp=5 (expect 5)
+DEEPFALL_DROP slug=miner-ghoul item=stone n=1
+DEEPFALL_ENEMY_SLAIN slug=miner-ghoul remaining=26
+DEEPFALL_LOG Slain miner-ghoul
+DEEPFALL_SAVE_SAVED reason=kill mined=1 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE10 e jump_button_triggers=true (expect true)
+DEEPFALL_SELFTEST_PHASE10 f hud1_px=195 hud2_px=931 log_px=119 (expect all < 1248)
+DEEPFALL_SELFTEST_PHASE10 g hearts full=10 at_55hp=6 (expect 10, 6)
+DEEPFALL_SELFTEST_PHASE10 h embers=12 (expect 12) chunk_layers=312 (expect 312) parallax_cached=true (expect true)
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_0.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_1.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_2.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_3.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_4.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_5.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_6.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_7.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/idle_8.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/walkcycle_0.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/walkcycle_1.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/walkcycle_2.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/walkcycle_3.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+DEEPFALL_CLASS_SET id=red name=Red Soldier hp=120 melee=20 speed=0.90 ranged=false
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_0.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_1.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_2.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_3.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_4.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_5.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_6.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_7.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/idle_8.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/walkcycle_0.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/walkcycle_1.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/walkcycle_2.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/red/walkcycle_3.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/idle_0.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/idle_1.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/idle_2.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/idle_3.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/idle_4.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/idle_5.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/idle_6.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4249)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/walkcycle_0.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/walkcycle_1.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/walkcycle_2.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+WARNING: Loaded resource as image file, this will not work on export: 'res://assets/player_anim/mage/walkcycle_3.png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2894)
+     GDScript backtrace (most recent call first):
+         [0] _figure_height (res://scripts/main.gd:4295)
+         [1] _run_selftest_phase10 (res://scripts/main.gd:4253)
+         [2] _run_selftest (res://scripts/main.gd:1383)
+         [3] _run_selftest_phase9b (res://scripts/main.gd:4127)
+DEEPFALL_SELFTEST_PHASE10 i walk_heights_match_idle=true (expect true)
+DEEPFALL_LOG Tool: Sword
+DEEPFALL_SAVE_SAVED reason=selftest10 mined=1 cracked=0 torches=0 slain=0 ore=0 inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_SELFTEST_PHASE10 j save_version=9.0 tool=sword (expect 9 sword)
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_SAVE_LOADED mined=1 cracked=0 torches=0 slain=0 ore=0 pos=(672.0, 2848.0) hp=80 class=mage inv={ "wood": 0, "stone": 1, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_SELFTEST_PHASE10 j old_v9_save_defaults_pickaxe=true (expect true)
+DEEPFALL_SELFTEST_PHASE10 done PASS=true
+DEEPFALL_SELFTEST done

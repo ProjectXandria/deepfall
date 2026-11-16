@@ -27,15 +27,35 @@ const PX_SCALE := 3.0
 
 # slug -> {hp, speed, damage, aggro, range, half_w, half_h, walk, attack, wander}
 # walk/attack are EXACT frame counts from assets/enemies/MANIFEST.md:
-# ore-mimic attack is 3 frames (never index attack[3]); tunnel-worm
-# walk is 2 frames (walk_0..1 only).
+# W5: ore-mimic attack is 4 frames (attack_3 = PROC follow-through
+# lunge, translated from attack_2 — see loop/phases/w5-animation-gaps/
+# w5-build-frames.py); tunnel-worm walk is 3 frames (walk_2 = PROC
+# mid-slither sine phase from walk_1).
 const STATS := {
 	"cave-bat-swarm": {"hp": 10, "speed": 150.0, "damage": 5, "aggro": 260.0, "range": 48.0, "half_w": 20.0, "half_h": 16.0, "walk": 4, "attack": 4, "wander": true},
 	"miner-ghoul": {"hp": 20, "speed": 90.0, "damage": 8, "aggro": 300.0, "range": 56.0, "half_w": 14.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
 	"rock-golem": {"hp": 50, "speed": 45.0, "damage": 12, "aggro": 240.0, "range": 64.0, "half_w": 22.0, "half_h": 40.0, "walk": 4, "attack": 4, "wander": true},
 	"cave-spider": {"hp": 15, "speed": 130.0, "damage": 6, "aggro": 320.0, "range": 52.0, "half_w": 24.0, "half_h": 24.0, "walk": 4, "attack": 4, "wander": true},
-	"ore-mimic": {"hp": 30, "speed": 60.0, "damage": 10, "aggro": 200.0, "range": 60.0, "half_w": 20.0, "half_h": 32.0, "walk": 4, "attack": 3, "wander": false},
-	"tunnel-worm": {"hp": 25, "speed": 70.0, "damage": 8, "aggro": 280.0, "range": 64.0, "half_w": 26.0, "half_h": 20.0, "walk": 2, "attack": 4, "wander": true},
+	"ore-mimic": {"hp": 30, "speed": 60.0, "damage": 10, "aggro": 200.0, "range": 60.0, "half_w": 20.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": false},
+	"tunnel-worm": {"hp": 25, "speed": 70.0, "damage": 8, "aggro": 280.0, "range": 64.0, "half_w": 26.0, "half_h": 20.0, "walk": 3, "attack": 4, "wander": true},
+	# KayKit bake 2026-11-13 (CC0): Skeleton_Warrior.glb side-view renders,
+	# Walking_A / 1H_Melee_Attack_Chop / Idle clips, Skeleton_Blade on
+	# handslot.r. Pixel frames in assets/enemies_px/skeleton-warrior/
+	# (26px sets, Phase 12 style); hi-res 256px source sets in
+	# assets/enemies/skeleton-warrior/. half_w is the body, not the sword.
+	"skeleton-warrior": {"hp": 25, "speed": 80.0, "damage": 8, "aggro": 280.0, "range": 56.0, "half_w": 12.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	# Chunk 1 (2026-11-14): staged multiframe sets converted by
+	# build_chunk1_enemies.py (256px hi-res in assets/enemies/,
+	# 26px LANCZOS game set in assets/enemies_px/, slump death).
+	# Both are dungeon-plausible undead; the wraith is wide (38px
+	# canvas) so its body half-width is 16, not 12.
+	"grave-revenant": {"hp": 30, "speed": 70.0, "damage": 10, "aggro": 280.0, "range": 60.0, "half_w": 12.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	"ash-wraith": {"hp": 20, "speed": 110.0, "damage": 6, "aggro": 300.0, "range": 52.0, "half_w": 16.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	# Chunk 1 (2026-11-14): KayKit Skeleton Rogue, Blender-baked by
+	# bake_rogue.py (walk Walking_A_Rig, attack 1H stab, idle Idle_Rig;
+	# Skeleton_Crossbow on handslot.r, visual only — the AI is melee).
+	# Fast, fragile flanker: lowest hp, highest speed of the skeletons.
+	"skeleton-rogue": {"hp": 15, "speed": 140.0, "damage": 6, "aggro": 320.0, "range": 52.0, "half_w": 12.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
 }
 
 var slug := ""
@@ -220,7 +240,7 @@ func _ai(delta: float) -> void:
 		# Start attack: face the player, plant, windup then strike.
 		facing = 1 if to_player.x >= 0.0 else -1
 		_attack_duration = _attack_frames.size() / 8.0
-		# Mimic attack is only 3 frames (0.375s): strike must land
+		# W5: mimic attack is 4 frames (0.5s): strike must land
 		# inside the animation, so clamp the strike point to 60% in.
 		_strike_at = minf(STRIKE_AT, _attack_duration * 0.6)
 		_attack_timer = _attack_duration
@@ -271,7 +291,7 @@ func _ground_ahead(dir: int) -> bool:
 	var feet_y: float = position.y + half_h + 4.0
 	var cx := int(floor(ahead_x / TILE))
 	var cy := int(floor(feet_y / TILE))
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
 	var t: int = fg[cy][cx]
 	return t != 0
@@ -332,13 +352,13 @@ func _update_animation(delta: float) -> void:
 	_sprite.rotation = lerpf(_sprite.rotation, lean, minf(1.0, 12.0 * delta))
 
 func _solid(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = fg[cy][cx]
 	return t != 0 and t != 7
 
 func _platform(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
 	return fg[cy][cx] == 7
 

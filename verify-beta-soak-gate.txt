@@ -1,0 +1,15 @@
+soak started Mon Nov  9 00:06:49 PST 2026
+soak rc=0
+== script_errors=0 ==
+SOAK_STUCK t=16 pos=(33, 80) dir=1
+SOAK_STUCK t=31 pos=(32, 81) dir=1
+SOAK_STUCK t=64 pos=(28, 82) dir=-1
+SOAK_STUCK t=94 pos=(28, 82) dir=-1
+SOAK_STUCK t=103 pos=(28, 82) dir=-1
+SOAK_STUCK t=125 pos=(19, 81) dir=-1
+SOAK_STUCK t=131 pos=(23, 82) dir=1
+SOAK_STUCK t=153 pos=(32, 83) dir=1
+SOAK_STUCK t=162 pos=(32, 83) dir=1
+SOAK_STUCK t=167 pos=(32, 83) dir=1
+SOAK_DONE t=180 deaths=0 stuck=10 kills=2 mined=11 fps_min=1 fps_avg=5
+SOAK_CHAIN_DONE

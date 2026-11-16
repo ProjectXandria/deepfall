@@ -269,6 +269,13 @@ func _blocked(p: Vector2) -> bool:
 	return false
 
 func _input(event: InputEvent) -> void:
+	# Phase 14 correction: NO coordinate conversion here. The engine
+	# already converts screen pixels to canvas units before _input
+	# (verified by probe: feeding screen (2244,924) via push_input
+	# AND parse_input_event both arrive at _input as canvas
+	# (1496,616)). Converting again here double-divides by the 1.5x
+	# stretch and breaks every button — that was the first, wrong
+	# version of this fix. event.position is already in canvas units.
 	if event is InputEventScreenTouch:
 		touch_used = true
 		if event.pressed:
@@ -426,21 +433,16 @@ func _process(delta: float) -> void:
 	_overlay.queue_redraw()
 
 func _draw_sticks(c: Control) -> void:
+	# Phase 14b: no fixed hint rings. A stick appears ONLY where a thumb
+	# lands (see _touch_down) — a ring pinned to a fixed spot reads as a
+	# fixed stick, which is the pre-Emergent look the player reported.
 	if bool(main_node.get("_selecting")) or (_settings_panel != null and _settings_panel.visible):
 		return
 	var op: float = float(settings.get("opacity", 0.85))
-	var hint := Color(1, 1, 1, 0.10 * op)
-	var lh: bool = bool(settings.get("left_handed", false))
-	var move_hint := Vector2(_vs.x - 150 if lh else 150, _vs.y - 150)
-	var aim_hint := Vector2(_vs.x * (0.38 if lh else 0.62), _vs.y - 200)
 	if _move_active:
 		_draw_stick(c, _move_base, _move_pos, Color(0.55, 0.85, 1.0), op)
-	elif touch_used or _editing:
-		c.draw_arc(move_hint, _stick_r, 0, TAU, 40, hint, 2.0, true)
 	if _aim_active:
 		_draw_stick(c, _aim_base, _aim_pos, Color(1.0, 0.7, 0.35), op)
-	elif touch_used or _editing:
-		c.draw_arc(aim_hint, _stick_r, 0, TAU, 40, hint, 2.0, true)
 
 func _draw_stick(c: Control, base: Vector2, pos: Vector2, col: Color, op: float) -> void:
 	var d := pos - base
@@ -454,6 +456,8 @@ func _draw_stick(c: Control, base: Vector2, pos: Vector2, col: Color, op: float)
 
 func _jump_down() -> void:
 	_jump_btn_held = true
+	# Phase 14: a JUMP-button press is a full jump, even on a tap.
+	player.jump_btn_full = true
 	_apply_jump()
 
 func _jump_up() -> void:

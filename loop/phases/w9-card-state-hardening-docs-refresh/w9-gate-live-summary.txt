@@ -1,0 +1,23 @@
+=== selftest ===
+selftest rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=2131
+=== selftest-load ===
+selftest-load rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1384
+=== p11-tech ===
+p11-tech rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1382
+p11-values p11-tech -> OK
+=== p11-red ===
+p11-red rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1533
+p11-values p11-red -> OK
+=== p11-mage ===
+p11-mage rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1853
+p11-values p11-mage -> OK
+=== p11-noclass ===
+p11-noclass rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=2182
+p11-values p11-noclass -> OK
+LIVE GATE CHAIN DONE 2026-11-14T14:53:19Z

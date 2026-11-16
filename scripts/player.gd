@@ -42,12 +42,15 @@ const SLAM_SPEED := 1300.0
 const SLAM_COOLDOWN := 1.4
 const SWING_TIME := 0.38
 
+# Chunk 3: "skeleton" is an UNLOCKABLE hero, never a starting class — the
+# starting list lives in main.gd CLASS_CARDS (tech/red/mage only). Its
+# stats below are proposed defaults (HP 90 / melee 18), Skit's call to tune.
 const CLASS_DATA := {
 	"tech": {"name": "Tech Soldier", "max_hp": 100, "melee": 15,
 		"speed": 1.0, "ranged": false,
 		"counts": {"idle": 9, "walk": 9, "shoot": 5, "walkcycle": 4,
 			"fall": 3, "melee": 4, "reload": 0, "thruster": 6,
-			"dying": 6, "crouch": 4, "climb": 0, "swim": 0}},
+			"dying": 6, "crouch": 4, "climb": 0, "swim": 4}},
 	"red": {"name": "Red Soldier", "max_hp": 120, "melee": 20,
 		"speed": 0.9, "ranged": false,
 		"counts": {"idle": 9, "walk": 9, "shoot": 5, "walkcycle": 4,
@@ -58,6 +61,11 @@ const CLASS_DATA := {
 		"counts": {"idle": 7, "walk": 7, "shoot": 5, "walkcycle": 4,
 			"fall": 0, "melee": 4, "reload": 7, "thruster": 5,
 			"dying": 5, "crouch": 4, "climb": 4, "swim": 4}},
+	"skeleton": {"name": "Hooded Skeleton", "max_hp": 90, "melee": 18,
+		"speed": 1.0, "ranged": false,
+		"counts": {"idle": 9, "walk": 9, "shoot": 5, "walkcycle": 4,
+			"fall": 0, "melee": 4, "reload": 4, "thruster": 7,
+			"dying": 3, "crouch": 4, "climb": 4, "swim": 4}},
 }
 const HERO_RIG := preload("res://scripts/hero_rig.gd")
 
@@ -68,6 +76,10 @@ var speed_mult := 1.0
 var ranged := false
 
 var fg: Array = []
+# Chunk 2: slope cells (cell -> {"shape": int, "mat": String}), mirrored
+# from main.gd per rebuild. Slopes are NOT solid: the Y pass snaps the
+# feet to their heightfield floor instead of blocking like a wall.
+var slopes: Dictionary = {}
 var main_node: Node = null
 var vel := Vector2.ZERO
 var facing := 1
@@ -82,6 +94,16 @@ var touch_move := 0.0
 var touch_jump := false
 var touch_crouch := false
 var touch_drop := false
+# Chunk 3: debug pose override for screenshot captures of states with no
+# gameplay trigger yet ("climb" / "swim"); "" = normal. Set by main.gd's
+# --screenshot-pose=<pose> flag only.
+var pose_override := ""
+# Phase 14: the JUMP button gives a FULL jump even on a quick tap.
+# A tap otherwise gets jump-cut (JUMP_CUT 0.45) to a ~34 px hop,
+# which reads as a dead button on a phone. The button sets this on
+# press; it clears on landing. Stick-flick jumps keep the variable
+# height (the cut still applies to them).
+var jump_btn_full := false
 # Phase 11: aim (unit vector, world space). aiming = right stick held.
 var aim := Vector2(1, 0)
 var aiming := false
@@ -390,7 +412,7 @@ func _physics_process(delta: float) -> void:
 		elif jump_down and absf(vel.y) < 120.0:
 			g *= APEX_MULT
 		vel.y += g * delta
-		if not jump_down and vel.y < -200.0 and not _jump_cut_done and _kb_timer <= 0.0:
+		if not jump_down and vel.y < -200.0 and not _jump_cut_done and not jump_btn_full and _kb_timer <= 0.0:
 			vel.y *= JUMP_CUT
 			_jump_cut_done = true
 	if vel.y > MAX_FALL and not slam_active:
@@ -405,6 +427,7 @@ func _physics_process(delta: float) -> void:
 		jumps_left = 2
 		_double_jumped = false
 		_air_dash_used = false
+		jump_btn_full = false
 	else:
 		coyote_timer = max(0.0, coyote_timer - delta)
 	var drop_down := Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN) or touch_drop
@@ -467,6 +490,7 @@ func _animate(delta: float, move: float) -> void:
 	rig.call("animate", {
 		"delta": delta, "vel": vel, "on_ground": on_ground, "move": move,
 		"crouch": _crouching, "swing": swing,
+		"climb": pose_override == "climb", "swim": pose_override == "swim",
 		"aim": _swing_aim if attack_timer > 0.0 else aim, "aiming": aiming,
 		"dash": dash_timer > 0.0 or slam_active, "hurt": hurt_timer > 0.0 and dash_timer <= 0.0,
 		"dead": dead, "land": _land_timer, "stretch": _stretch_timer,
@@ -483,13 +507,13 @@ func _animate(delta: float, move: float) -> void:
 		cam.offset = _cam_look + shake
 
 func _solid(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = fg[cy][cx]
 	return t != 0 and t != 7
 
 func _platform(cx: int, cy: int) -> bool:
-	if cx < 0 or cx >= 80 or cy < 0 or cy >= 45:
+	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
 	return fg[cy][cx] == 7
 
@@ -497,6 +521,33 @@ func _standing_on_platform() -> bool:
 	var cx := int(floor(position.x / TILE))
 	var cy := int(floor((position.y + half_h + 1.0) / TILE))
 	return _platform(cx, cy)
+
+# Chunk 2: slope floor. Shape codes match main.gd (1 rise-right,
+# 2 rise-left, 3 half-block, 4 stairs rise-right, 5 stairs rise-left).
+# lx is the player's centre x within the cell, clamped 0..63.
+func _slope_shape(cx: int, cy: int) -> int:
+	var key := Vector2i(cx, cy)
+	if not slopes.has(key):
+		return 0
+	var s: Dictionary = slopes[key]
+	return int(s.get("shape", 0))
+
+func _slope_floor(shape: int, lx: float) -> float:
+	# Floor height within the cell (0 = cell top). Shape 1's diagonal
+	# (64 - lx) matches the staged slope art's first-opaque line to
+	# ~6 px; shape 4/5's 52 - 0.6*lx matches the measured stair art
+	# (low edge ~52 px, high edge ~14 px).
+	if shape == 1:
+		return 64.0 - lx
+	if shape == 2:
+		return lx
+	if shape == 3:
+		return 32.0
+	if shape == 4:
+		return 52.0 - lx * 0.6
+	if shape == 5:
+		return 14.2 + lx * 0.6
+	return 64.0
 
 func _props() -> Array:
 	if main_node == null:
@@ -555,6 +606,9 @@ func _move_axis(delta: float, x_axis: bool) -> void:
 		position.y += vel.y * delta
 		var left := int(floor((position.x - half_w + 1) / TILE))
 		var right := int(floor((position.x + half_w - 1) / TILE))
+		# Chunk 2: grounded state at Y-pass entry (the X pass never
+		# touches on_ground) — the slope glue below needs it.
+		var was_ground := on_ground
 		on_ground = false
 		if vel.y > 0:
 			var cy := int(floor((position.y + half_h) / TILE))
@@ -571,6 +625,40 @@ func _move_axis(delta: float, x_axis: bool) -> void:
 					position.y = (cy + 1) * TILE + half_h + 0.01
 					vel.y = 0.0
 					break
+		# Chunk 2: slope snap — the slope floor is a heightfield, not
+		# a solid cell, so the solid pass above cannot catch it.
+		# Sampled at the player's centre column, feet row first, then
+		# the row above (feet inside a slope cell straddle its top).
+		# Gated on vel.y >= 0 so jumping up through a slope from below
+		# passes through, like a one-way platform. It must run even
+		# when the solid pass already grounded the player: walking on
+		# the flat floor into a slope, the solid floor holds on_ground
+		# true while the slope surface ahead is higher — without this
+		# the player walks under the slope instead of up it. prev_feet
+		# within 40 px above the surface covers walking up a face
+		# (feet end below the new surface) and the 32 px half-block
+		# step; the was_ground glue (feet up to 20 px above the
+		# surface) keeps the player stuck to the slope walking down
+		# instead of going airborne for a few frames on every step.
+		if vel.y >= 0.0:
+			var cx0 := int(floor(position.x / TILE))
+			var feet_row := int(floor((position.y + half_h) / TILE))
+			for cy0 in [feet_row, feet_row - 1]:
+				# Loop var over an untyped Array is Variant — cast it
+				# before any := inference touches it.
+				var cy: int = int(cy0)
+				var shape := _slope_shape(cx0, cy)
+				if shape == 0:
+					continue
+				var lx := clampf(position.x - cx0 * TILE, 0.0, 63.0)
+				var floor_y := cy * TILE + _slope_floor(shape, lx)
+				var feet := position.y + half_h
+				var above_tol := 20.0 if was_ground else 0.01
+				if prev_feet <= floor_y + 40.0 and feet >= floor_y - above_tol:
+					position.y = floor_y - half_h - 0.01
+					vel.y = 0.0
+					on_ground = true
+				break
 		for pr in _props():
 			if not is_instance_valid(pr) or pr.broken:
 				continue

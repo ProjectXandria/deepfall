@@ -1,0 +1,8 @@
+=== W5 live gate chain start Fri Nov 13 15:29:04 UTC 2026 ===
+selftest rc=0 errors=0 passfalse=0
+p11-tech rc=0 errors=0 passfalse=0
+p11-red rc=0 errors=0 passfalse=0
+p11-mage rc=0 errors=0 passfalse=0
+selftest-load rc=0 errors=0 passfalse=0
+selftest-load-proper rc=0 errors=0 passfalse=0
+=== W5 live gate chain done Fri Nov 13 15:34:28 UTC 2026 FAIL=0 ===

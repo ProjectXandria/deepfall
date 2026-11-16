@@ -1,0 +1,44 @@
+Godot Engine v4.8.beta1.official.4d10419ca - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 20.1.2, 256 bits)
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+ALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory
+ALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default
+ERROR: Condition "status < 0" is true. Returning: ERR_CANT_OPEN
+   at: init_output_device (drivers/alsa/audio_driver_alsa.cpp:97)
+WARNING: All audio drivers failed, falling back to the dummy driver.
+     at: initialize (servers/audio/audio_driver.cpp:244)
+
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1602)
+     GDScript backtrace (most recent call first):
+         [0] _layout (res://scripts/touch_ui.gd:242)
+         [1] _ready (res://scripts/touch_ui.gd:168)
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1344
+DEEPFALL_CLASS_SELECT_SHOWN
+DEEPFALL_W3_LEDGES legs=46 cells=944
+DEEPFALL_ENEMY_SPAWNS total=26
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=78 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+MAP_ROOMS [[6, 40, 9, 6], [10, 61, 11, 10], [13, 25, 12, 7], [16, 13, 13, 10], [17, 47, 14, 7], [19, 76, 15, 7], [31, 37, 13, 6], [34, 5, 9, 6], [41, 19, 16, 7], [48, 56, 10, 10], [49, 70, 15, 10], [50, 31, 14, 7], [52, 40, 9, 10], [63, 50, 11, 7], [64, 21, 16, 7], [67, 36, 10, 10], [71, 73, 15, 8], [76, 10, 15, 8], [81, 55, 11, 9], [83, 2, 10, 6], [87, 38, 16, 9], [99, 19, 10, 10], [100, 3, 12, 7], [105, 66, 11, 6], [113, 50, 13, 7], [115, 22, 8, 7], [124, 62, 14, 10], [128, 34, 10, 10], [137, 13, 8, 7], [142, 57, 9, 10], [147, 11, 15, 10], [154, 70, 14, 6], [154, 55, 12, 9], [158, 34, 9, 7], [165, 10, 11, 10], [175, 60, 14, 6], [176, 30, 8, 7], [176, 50, 10, 8], [185, 10, 12, 6], [186, 37, 9, 7]]
+MAP_LEGS [[15, 43, 66], [19, 28, 43], [22, 18, 28], [24, 43, 50], [26, 66, 79], [37, 40, 50], [38, 8, 18], [49, 8, 22], [53, 40, 61], [56, 61, 75], [57, 22, 34], [56, 34, 45], [68, 53, 61], [72, 24, 34], [72, 41, 53], [78, 75, 77], [83, 14, 24], [86, 53, 59], [88, 5, 14], [95, 41, 42], [104, 24, 42], [106, 6, 24], [110, 59, 69], [119, 53, 69], [119, 24, 25], [131, 67, 69], [133, 25, 39], [141, 16, 39], [146, 62, 67], [154, 16, 16], [161, 62, 73], [160, 59, 62], [162, 37, 59], [170, 15, 16], [182, 59, 63], [180, 33, 37], [181, 54, 63], [191, 13, 15], [190, 33, 40], [72, 28, 41], [22, 18, 73], [83, 14, 24], [190, 40, 40], [10, 16, 43], [110, 40, 69], [190, 24, 40]]
+MAP_SPAWN (10, 44) MAP_EXIT (190, 42)
+WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2609)
+ERROR: 3 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

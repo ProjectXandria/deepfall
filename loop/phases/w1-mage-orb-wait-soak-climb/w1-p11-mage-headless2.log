@@ -1,0 +1,16 @@
+Godot Engine v4.8.beta1.official.4d10419ca - https://godotengine.org
+
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1602)
+     GDScript backtrace (most recent call first):
+         [0] _layout (res://scripts/touch_ui.gd:242)
+         [1] _ready (res://scripts/touch_ui.gd:168)
+DEEPFALL_ENEMY_SPAWNS total=24
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+DEEPFALL_PROPS spawned=63 skipped_broken=0
+DEEPFALL_CHUNK stream=(0, 1) loaded=6/78
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_PHASE1_READY seed=91835860 rooms=40/40 ore_veins=99 spawn=(10, 31) exit=(189, 20) connected=true load_ms=1449
+DEEPFALL_CLASS_SELECT_SHOWN

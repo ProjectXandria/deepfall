@@ -1,0 +1,16 @@
+=== selftest start 06:15:12 ===
+selftest rc=0 errors=0
+=== p11-tech start 06:15:56 ===
+p11-tech rc=0 errors=0
+=== p11-red start 06:17:02 ===
+p11-red rc=0 errors=0
+=== p11-mage start 06:18:11 ===
+p11-mage rc=0 errors=0
+=== selftest-load start 06:19:20 ===
+selftest-load rc=0 errors=0
+=== soak-s1 start 06:19:24 ===
+soak-s1 rc=0 errors=0
+=== soak-s2 start 06:24:52 ===
+soak-s2 rc=0 errors=0
+=== soak-s3 start 06:29:38 ===
+soak-s3 rc=0 errors=0

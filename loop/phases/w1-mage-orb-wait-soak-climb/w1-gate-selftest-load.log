@@ -1,0 +1,23 @@
+Godot Engine v4.8.beta1.official.4d10419ca - https://godotengine.org
+
+DEEPFALL_CLASS_SET id=tech name=Tech Soldier hp=100 melee=15 speed=1.00 ranged=false
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1602)
+     GDScript backtrace (most recent call first):
+         [0] _layout (res://scripts/touch_ui.gd:242)
+         [1] _ready (res://scripts/touch_ui.gd:168)
+DEEPFALL_SAVE_LOADED mined=1 cracked=1 torches=0 slain=0 ore=0 pos=(672.0, 2839.99) hp=80 class=mage inv={ "wood": 0, "stone": 4, "dirt": 0, "coal": 1, "gold": 1, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0 } lanterns=0 workbenches=0
+DEEPFALL_ENEMY_SPAWNS total=22
+DEEPFALL_CLASS_SET id=mage name=Hooded Mage hp=80 melee=10 speed=1.00 ranged=true
+DEEPFALL_PROPS spawned=65 skipped_broken=1
+DEEPFALL_CHUNK stream=(0, 2) loaded=6/78
+DEEPFALL_LOG Tool: Pickaxe
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1405
+DEEPFALL_SELFTEST_LOAD mined=1 torches=0 slain=0 pos_ok=true hp_ok=true ore_ok=true PASS=true
+DEEPFALL_SELFTEST_LOAD_PHASE7 inv_ok=true lanterns=0 lan_ok=true workbenches=0 bench_ok=true PASS7=true
+DEEPFALL_SELFTEST_LOAD_PHASE8 save_class=mage live_class=mage class_ok=true
+WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2609)
+ERROR: 3 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

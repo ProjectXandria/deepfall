@@ -1,0 +1,17 @@
+beta run started Sun Nov  8 19:16:29 PST 2026
+selftest rc=0
+selftest-p11 rc=0
+selftest-load rc=0
+== verify-beta-selftest.log script_errors=0 ==
+DEEPFALL_SELFTEST_PHASE7 done PASS=true
+DEEPFALL_SELFTEST_PHASE8 done PASS=true
+DEEPFALL_SELFTEST_PHASE9 done PASS=true
+DEEPFALL_SELFTEST_PHASE9B done PASS=true
+DEEPFALL_SELFTEST_PHASE10 done PASS=true
+== verify-beta-selftest-p11.log script_errors=0 ==
+DEEPFALL_P14 done
+== verify-beta-load.log script_errors=0 ==
+DEEPFALL_SELFTEST_LOAD mined=1 torches=0 slain=0 pos_ok=true hp_ok=true ore_ok=true PASS=true
+DEEPFALL_SELFTEST_LOAD_PHASE7 inv_ok=true lanterns=0 lan_ok=true workbenches=0 bench_ok=true PASS7=true
+DEEPFALL_SELFTEST_LOAD_PHASE8 save_class=tech live_class=tech class_ok=true
+BETA_CHAIN_DONE

@@ -1,14 +1,15 @@
 # main.gd — DEEPFALL Phase 7: crafting + inventory (on Phase 6 chunk-streamed persistent world).
-# Phase 5 and earlier kept: seeded generation (seed 20261101, 80x45),
-# polished chamber, 2-hit mining, torches, PointLight2D lighting,
-# enemies + combat, twin-stick touch controls.
+# Phase 5 and earlier kept: per-run random seed (Phase 14; was fixed
+# seed 20261101, 80x45 — now 200x90, 40 rooms),
+# polished chamber, 3-hit mining (Chunk 2; was 2-hit), torches,
+# PointLight2D lighting, enemies + combat, twin-stick touch controls.
 #
 # Phase 6 (this file) follows AUDIT-NEXT-PHASE.md §3.5 item 3, the
 # lower-risk path: KEEP full-world generation from the seed (no per-chunk
 # regeneration, no topology change, READY line unchanged). Streaming
 # applies to rendering / props / lights / enemies in 16x16-cell chunks
-# (5 x 3 = 15 chunks); collision stays the fg grid (always resident,
-# 3600 ints — the TileMapLayers were never the collision authority).
+# (13 x 6 = 78 chunks); collision stays the fg grid (always resident,
+# 18000 ints — the TileMapLayers were never the collision authority).
 # Player edits are edit deltas against the generated base and are saved
 # to user://deepfall_save.json (single slot): mined cells, 1-hit crack
 # state, placed torches, slain enemies (by deterministic spawn id),
@@ -21,7 +22,11 @@
 # separate/unlockable hero and is NOT selectable.
 extends Node2D
 
-const SEED := 20261101
+# Phase 14: the world seed is per-run, not fixed. run_seed is set in
+# _ready: --seed=N (headless tests), the saved seed (continuing a run),
+# or a fresh random 8-digit seed (new run / NEW button). Every game is
+# a different cave; the same seed still reproduces the same cave.
+var run_seed: int = 20261101
 const TILE := 64
 const TORCH_RADIUS_TILES := 7
 
@@ -50,6 +55,15 @@ var workbenches: Dictionary = {}
 var _pending_lanterns: Array = []
 var _pending_workbenches: Array = []
 var extracted := false
+# Chunk 3: hooded-skeleton unlock — set on first extraction, persisted in
+# the save dict. The skeleton is never a starting class.
+var skeleton_unlocked := false
+# Chunk 3: orb impact scale for the A/B (1.0 vs 2.0); --orb-scale=N.
+var _orb_scale := 2.0
+# Chunk 3: --orb-fallback forces the PNG frost-burst instead of the
+# Effekseer effect (the effect does not render under the sandbox software
+# renderer, so the A/B capture uses the fallback to show the scale).
+var _orb_force_fallback := false
 var mine_cooldown := 0.0
 var mine_damage: Dictionary = {}
 var _time := 0.0
@@ -92,7 +106,8 @@ const DEATH_FX_SCRIPT := preload("res://scripts/death_fx.gd")
 const ORB_IMPACT_EFK := "res://assets/effects-effekseer/mage_orb_impact/mage_orb_impact.efkefc"
 const DEATH_POOF_EFK := "res://assets/effects-effekseer/enemy_death_poof/enemy_death_poof.efkefc"
 const ENEMY_SLUGS := ["cave-bat-swarm", "miner-ghoul", "rock-golem",
-	"cave-spider", "ore-mimic", "tunnel-worm"]
+	"cave-spider", "ore-mimic", "tunnel-worm", "skeleton-warrior",
+	"grave-revenant", "ash-wraith", "skeleton-rogue"]
 var enemies: Array = []
 var kills := 0
 var _enemies_node: Node2D = null
@@ -118,11 +133,60 @@ const TRANS_NAMES := ["trans_rock_N", "trans_rock_E", "trans_rock_S", "trans_roc
 	"trans_dirt_N", "trans_dirt_E", "trans_dirt_S", "trans_dirt_W",
 	"corner_rock_TL", "corner_rock_TR", "corner_rock_BL", "corner_rock_BR",
 	"corner_dirt_TL", "corner_dirt_TR", "corner_dirt_BL", "corner_dirt_BR"]
+# Chunk 2: inner (concave) corner tiles. Named by the AIR diagonal:
+# inner_rock_NE = rock cell with its NE corner notched by diagonal air.
+const INNER_NAMES := ["inner_rock_NE", "inner_rock_NW", "inner_rock_SE", "inner_rock_SW",
+	"inner_dirt_NE", "inner_dirt_NW", "inner_dirt_SE", "inner_dirt_SW"]
+# Chunk 2: slope / half-block / stair art names (atlas columns after
+# INNER_NAMES). slope_<mat>_{r,l}: r rises to the right, l is the
+# horizontal flip of the same art. half_*: solid bottom half, floor at
+# mid-cell. stairs_*_{r,l}: half-rise slope (measured staged art rises
+# ~32-38 px across the tile). ramps are beams (VISUAL-SPEC section 4)
+# — decor only, never atlas-wired, never walkable terrain.
+const SLOPE_NAMES := ["slope_stone_r", "slope_stone_l",
+	"slope_dirt_r", "slope_dirt_l", "slope_brick_r", "slope_brick_l",
+	"slope_grass_r", "slope_grass_l", "slope_obsidian_r", "slope_obsidian_l",
+	"half_stone", "half_dirt", "half_wood",
+	"stairs_stone_r", "stairs_stone_l", "stairs_wood_r", "stairs_wood_l"]
+# Chunk 2: slope shapes. 0 = none. 1 = rise-right (floor 64-lx),
+# 2 = rise-left (floor lx), 3 = half-block (floor 32),
+# 4 = stairs rise-right (floor 52 - 0.6*lx, measured from staged art),
+# 5 = stairs rise-left (floor 14.2 + 0.6*lx, the mirror).
+const SLOPE_RISE_RIGHT := 1
+const SLOPE_RISE_LEFT := 2
+const SLOPE_HALF := 3
+const SLOPE_STAIRS := 4
+const SLOPE_STAIRS_LEFT := 5
+# Chunk 2 groundwork: region ids only, no behaviour yet. Region 0 =
+# Forgotten Mines (live). Region 1 = Fungal Hollows (scaffold: seed
+# derivation in _region_seed + file layout in
+# FUNGAL-HOLLOWS-GROUNDWORK.md). The full region build is out of scope.
+const REGIONS := {"mines": 0, "fungal_hollows": 1}
+# Chunk 2: slope cells, derived per rebuild in _build_polished_chamber.
+# cell -> {"shape": int, "mat": String}. Slopes live in AIR cells (fg
+# untouched): no map-gen change, no save data, no solid-cell edits.
+var slopes: Dictionary = {}
 # Phase 9: parallax layers (staged cave-silhouettes art, already in the
 # tree). Far moves at 0.35x camera, mid at 0.65x — positions are set every
 # frame in _update_parallax() from the camera centre.
 var _plx_far: Sprite2D = null
 var _plx_mid: Sprite2D = null
+# Chunk 4: foreground framing (VISUAL-SPEC §5.4) — sparse dark rock
+# shapes at the TOP screen corners, drawn above the player in the
+# scene's Foreground CanvasLayer (layer 2), at parallax ~1.2 (they
+# drift 0.2x against the camera on screen, clamped to ±48 px so they
+# can never leave the viewport corners — a full 1.2x world-space
+# drift over the 12800 px map would push screen-space shapes
+# off-screen). Layering: Foreground (2) sits above the world but
+# BELOW HUD/TouchUI (layer 3, main.tscn) — the wedges must never
+# cover the hearts or the MENU/CRAFT buttons, which the first build
+# did until the HUD layers were raised. They never cover gameplay:
+# _update_framing_clearance() hides any shape whose screen rect
+# overlaps the player, a live enemy, or a torch (called from
+# _process every frame).
+var _fg_frames: Array = []
+var _fg_frame_base_cam := Vector2.ZERO
+var _fg_frames_built := false
 # Phase 9: second HUD label (hint line, font 14) so line 1 and the hint
 # line are measured and fitted independently at 1280x720.
 var _hud2: Label = null
@@ -147,11 +211,15 @@ var _last_parallax_cam := Vector2(-99999, -99999)
 var _orb_fx: Array = []
 var _orb_impact_frames: Array = []
 const STREAM := 16
-const STREAM_COLS := 5
-const STREAM_ROWS := 3
-const STREAM_TOTAL := 15
+# Phase 14: chunk grid derives from the map size (200x90 -> 13x6 = 78).
+const STREAM_COLS := (DeepfallMapGen.W + STREAM - 1) / STREAM
+const STREAM_ROWS := (DeepfallMapGen.H + STREAM - 1) / STREAM
+const STREAM_TOTAL := STREAM_COLS * STREAM_ROWS
 const SAVE_PATH := "user://deepfall_save.json"
-const SAVE_VERSION := 8
+# Phase 14: SAVE_VERSION 9 — v8 saves are for the old 80x45 world and
+# are ignored (old seed/size would rebuild a different cave than the
+# saved deltas describe). Honest break, not a migration.
+const SAVE_VERSION := 9
 var _saved_class := "tech"
 # Phase 8: class select. _selecting is true until a class is picked on a
 # new run; the player physics is frozen and world clicks are ignored
@@ -164,10 +232,20 @@ var _fg_layers: Array = []
 var _wall_layers: Array = []
 var _edge_layers: Array = []
 var _damage_layers: Array = []
+# Chunk 8 (b): cosmetic overlay layers, one per stream chunk, parallel
+# to _damage_layers. Cracks/moss/paths live here, never baked into a
+# base tile, never affecting collision (collision is the fg grid only).
+var _overlay_layers: Array = []
 var _prop_chunks: Array = []
 var _main_tileset: TileSet = null
 var _edge_tileset: TileSet = null
 var _damage_tileset: TileSet = null
+# Chunk 8 (b): overlay tileset (3 tiles: moss / crack / path, existing art).
+var _overlay_tileset: TileSet = null
+# Chunk 8 (c): the 16-tile Terrain Set resource (deepfall_terrain.tres).
+# Loaded in _build_tileset; null (with a loud log line) if the file is
+# missing — the game still plays, the chunk-8 selftest fails.
+var _terrain_tileset: TileSet = null
 var _tileset_built := false
 var _chunks_created := false
 var _active_chunks: Dictionary = {}
@@ -176,6 +254,10 @@ var _loaded_chunk_count := 0
 var _world_ready := false
 var _mined_cells: Dictionary = {}
 var _slain_ids: Dictionary = {}
+# Chunk 1: respawn timers — spawn_id -> _run_time when the slain foe
+# may return at its deterministic cell. Not saved; on load every
+# slain id is re-armed at _run_time + 60 (see load_game).
+var _respawn_at: Dictionary = {}
 var _enemy_spawns: Array = []
 var _pending_torches: Array = []
 var _saved_player_pos := Vector2.ZERO
@@ -234,18 +316,96 @@ func set_tool(t: String) -> void:
 func cycle_tool() -> void:
 	set_tool("sword" if tool == "pickaxe" else "pickaxe")
 
+# Phase 14: loading screen. Added as a child CanvasLayer (layer 100)
+# so it paints over everything while the world builds.
+var _loading: CanvasLayer = null
+
+func _show_loading(text: String) -> void:
+	if _loading != null:
+		return
+	var cl := CanvasLayer.new()
+	cl.layer = 100
+	cl.process_mode = Node.PROCESS_MODE_ALWAYS
+	var bg := ColorRect.new()
+	bg.color = Color(0.02, 0.02, 0.04, 1.0)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cl.add_child(bg)
+	var lab := Label.new()
+	lab.text = text
+	lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lab.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lab.add_theme_font_size_override("font_size", 34)
+	lab.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cl.add_child(lab)
+	add_child(cl)
+	_loading = cl
+
+func _hide_loading() -> void:
+	if _loading != null:
+		_loading.queue_free()
+		_loading = null
+
+# W4 profiling: --profile prints cumulative ms per startup stage
+# (W4_STAGE <name> ms=<n>, from _ready entry). Dormant otherwise.
+var _w4_prof := false
+var _w4_t0 := 0
+func _w4_prof_begin() -> void:
+	_w4_prof = "--profile" in OS.get_cmdline_user_args()
+	_w4_t0 = Time.get_ticks_msec()
+func _w4_prof_mark(stage: String) -> void:
+	if _w4_prof:
+		print("W4_STAGE %s ms=%d" % [stage, Time.get_ticks_msec() - _w4_t0])
+
 func _ready() -> void:
+	var _t0 := Time.get_ticks_msec()
+	_w4_prof_begin()
 	if "--new-run" in OS.get_cmdline_user_args():
 		DirAccess.remove_absolute(SAVE_PATH)
 		print("DEEPFALL_NEW_RUN save cleared before launch")
-	_rebuild_world(true)
+	# Phase 14: pick this run's seed BEFORE the world exists.
+	# --seed=N wins (headless tests stay deterministic); a valid save
+	# keeps its seed; anything else rolls a fresh random 8-digit seed,
+	# so every new game is a different cave.
+	var args0: PackedStringArray = OS.get_cmdline_user_args()
+	var seed_arg := -1
+	for a in args0:
+		if a.begins_with("--seed="):
+			seed_arg = int(a.trim_prefix("--seed="))
+		# Chunk 3: --orb-scale=N stages the mage orb impact at that scale
+		# (A/B: 1.0 vs 2.0). Default 1.0; clamped to a sane range.
+		if a.begins_with("--orb-scale="):
+			_orb_scale = clampf(float(a.trim_prefix("--orb-scale=")), 0.25, 4.0)
+		if a == "--orb-fallback":
+			_orb_force_fallback = true
+	if seed_arg >= 0:
+		run_seed = seed_arg
+	else:
+		var sd := _load_save_dict()
+		if int(sd.get("version", 0)) == SAVE_VERSION and int(sd.get("seed", 0)) > 0:
+			run_seed = int(sd.get("seed", 0))
+		else:
+			randomize()
+			run_seed = randi_range(10000000, 99999999)
+	# Phase 14: show the loading screen FIRST and let it paint before
+	# the heavy work. _ready used to generate + render the whole world
+	# synchronously before the first frame, so the phone sat on a
+	# black/frozen screen at first start. Two process_frame awaits let
+	# the overlay draw; the rebuild then stages between frames.
+	_show_loading("DIGGING THE MINES…")
+	_w4_prof_mark("ready_loading_shown")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_w4_prof_mark("ready_frames")
+	await _rebuild_world(true, true)
+	_w4_prof_mark("ready_rebuild")
 	camera.limit_left = 0
 	camera.limit_top = 0
-	camera.limit_right = 80 * TILE
-	camera.limit_bottom = 45 * TILE
+	camera.limit_right = DeepfallMapGen.W * TILE
+	camera.limit_bottom = DeepfallMapGen.H * TILE
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = 5.0
 	_render_background()
+	_w4_prof_mark("ready_background")
 	var exit_cell: Vector2i = data["exit"]
 	var beacon := ColorRect.new()
 	beacon.size = Vector2(TILE, TILE * 2)
@@ -261,7 +421,9 @@ func _ready() -> void:
 	beacon_light.position = Vector2((exit_cell.x + 0.5) * TILE, (exit_cell.y - 0.5) * TILE)
 	add_child(beacon_light)
 	_build_craft_panel()
+	_w4_prof_mark("ready_craft")
 	_build_class_select()
+	_w4_prof_mark("ready_class")
 	# Phase 9: second HUD label for the hint line (font 14, own rect).
 	var hud2 := Label.new()
 	hud2.name = "HintLabel"
@@ -326,11 +488,13 @@ func _ready() -> void:
 	add_child(_reticle)
 	_hearts.main_node = self
 	$HUD.add_child(_hearts)
+	_w4_prof_mark("ready_hud")
 	log_event("Tool: Pickaxe")
-	print("DEEPFALL_PHASE1_READY seed=%d rooms=%d/%d ore_veins=%d spawn=%s exit=%s connected=%s" % [
-		SEED, data["rooms_reached"], data["rooms_total"], data["ore"],
-		str(data["spawn"]), str(exit_cell), str(data["connected"])])
+	print("DEEPFALL_PHASE1_READY seed=%d rooms=%d/%d ore_veins=%d spawn=%s exit=%s connected=%s load_ms=%d" % [
+		run_seed, data["rooms_reached"], data["rooms_total"], data["ore"],
+		str(data["spawn"]), str(exit_cell), str(data["connected"]), Time.get_ticks_msec() - _t0])
 	_world_ready = true
+	_hide_loading()
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	# Phase 8 class-select flow: a save skips the select (saved class
 	# was applied in _rebuild_world); a new run shows it. Headless
@@ -344,9 +508,23 @@ func _ready() -> void:
 				player.set_class(a.trim_prefix("--class="))
 	elif _has_save:
 		pass  # saved class already applied; no re-pick
-	elif ("--screenshot" in args or "--screenshot-pair" in args) and "--screenshot-class" not in args:
+	elif ("--screenshot" in args or "--screenshot-pair" in args or "--screenshot-chunk2" in args) and "--screenshot-class" not in args:
 		player.set_class("tech")
 	else:
+		_show_class_select(true)
+	# Chunk 3: --screenshot honours --class=<id> even when a save exists —
+	# the _has_save branch above would otherwise keep the saved class, so
+	# a --class=red run silently captured the saved class instead.
+	if "--screenshot" in args and "--screenshot-class" not in args:
+		for a in args:
+			if a.begins_with("--class="):
+				player.set_class(a.trim_prefix("--class="))
+				break
+	# Chunk 3: --screenshot-class forces the select screen even when a
+	# save exists — otherwise the _has_save branch above skips it and the
+	# flag captures plain gameplay. The save's class + unlock state were
+	# already applied in _rebuild_world, so the panel renders truthfully.
+	if "--screenshot" in args and "--screenshot-class" in args:
 		_show_class_select(true)
 	for a0 in args:
 		if a0 == "--selftest" or a0 == "--selftest-load" or a0.begins_with("--screenshot"):
@@ -359,28 +537,120 @@ func _ready() -> void:
 		await _run_selftest_p11()
 		get_tree().quit()
 		return
+	if "--selftest-chunk1" in args:
+		_show_class_select(false)
+		_cards_enabled = false
+		await _run_selftest_chunk1()
+		get_tree().quit()
+		return
+	if "--soak" in args:
+		_show_class_select(false)
+		var soak_secs := 180.0
+		for a in args:
+			if a.begins_with("--soak-secs="):
+				soak_secs = maxf(10.0, float(a.trim_prefix("--soak-secs=")))
+		await _run_soak(soak_secs)
+		get_tree().quit()
+		return
+	if "--climb-probe" in args:
+		_show_class_select(false)
+		_cards_enabled = false
+		await _run_climb_probe()
+		get_tree().quit()
+		return
+	if "--selftest-chunk2" in args:
+		_show_class_select(false)
+		_cards_enabled = false
+		_run_selftest_chunk2()
+		get_tree().quit()
+		return
+	if "--selftest-chunk8" in args:
+		_show_class_select(false)
+		_cards_enabled = false
+		_run_selftest_chunk8()
+		get_tree().quit()
+		return
+	if "--selftest-chunk8-floodfill" in args:
+		_show_class_select(false)
+		_cards_enabled = false
+		_run_selftest_chunk8_floodfill()
+		get_tree().quit()
+		return
+	if "--dump-layers" in args:
+		_show_class_select(false)
+		_dump_layers()
+		get_tree().quit()
+		return
+	if "--dump-map" in args:
+		_show_class_select(false)
+		DirAccess.remove_absolute(SAVE_PATH)
+		await _rebuild_world(false)
+		print("MAP_ROOMS %s" % str(data["rooms"]))
+		print("MAP_LEGS %s" % str(data.get("legs", [])))
+		print("MAP_SPAWN %s MAP_EXIT %s" % [str(data["spawn"]), str(data["exit"])])
+		get_tree().quit()
+		return
 	if "--screenshot-pair" in OS.get_cmdline_user_args():
 		await _run_screenshot_pair()
 		get_tree().quit()
 	elif "--screenshot" in OS.get_cmdline_user_args():
+		if "--screenshot-c4" in OS.get_cmdline_user_args():
+			await _run_screenshot_c4()
+			get_tree().quit()
+			return
 		if "--screenshot-craft" in OS.get_cmdline_user_args():
 			_show_craft_panel(true)
 		await get_tree().create_timer(1.0).timeout
+		# Chunk 3: --screenshot-pose=<pose> for the pose-preview branch below.
+		var pose_arg := ""
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--screenshot-pose="):
+				pose_arg = a.trim_prefix("--screenshot-pose=")
 		if "--screenshot-orb" in OS.get_cmdline_user_args():
 			# Phase 9b: fire a real orb impact in front of the player and
-			# capture it early (~0.1 s in, while the CoreFlash is at peak
-			# and the shards are mid-flight of the 0.67 s effect).
+			# capture it mid-effect (~0.35 s in, shards mid-flight of the
+			# 0.67 s effect). Chunk 3: the old 0.1 s wait never captured
+			# the effect under llvmpipe (3-9 FPS) — the timer fired after
+			# ~1 frame and the viewport texture still predated the
+			# effect's first drawn frame. 0.35 s + two rendered frames
+			# guarantees the effect is on screen at capture.
+			# Chunk 3: the PNG fallback lives only 0.25 s, so a fallback
+			# capture waits 0.15 s and NO extra frames — at llvmpipe
+			# frame rates two more frames would outlive the burst.
+			# (The Effekseer path below still waits 0.35 s + 2 frames;
+			# on a real GPU that lands mid-effect.)
 			_spawn_orb_impact(player.position + Vector2(96, -32))
-			await get_tree().create_timer(0.1).timeout
+			if _orb_force_fallback:
+				await get_tree().create_timer(0.15).timeout
+			else:
+				await get_tree().create_timer(0.35).timeout
+				await get_tree().process_frame
+				await get_tree().process_frame
 			var orb_img := get_viewport().get_texture().get_image()
 			orb_img.save_png("res://screenshot_orb.png")
-			print("DEEPFALL_SCREENSHOT_ORB_SAVED")
+			print("DEEPFALL_SCREENSHOT_ORB_SAVED scale=%.2f fallback=%s" % [_orb_scale, str(_orb_force_fallback)])
+			get_tree().quit()
+			return
+		if "--screenshot-orb-probe" in OS.get_cmdline_user_args():
+			# Chunk 3 probe: spawn the orb impact in open air above the
+			# player and capture three frames (0.2 / 0.45 / 0.7 s) to
+			# prove whether the Effekseer effect renders visibly at all
+			# under llvmpipe, and at which point of its 0.67 s life.
+			# Usage: --screenshot --screenshot-orb-probe [--orb-scale=N]
+			_spawn_orb_impact(player.position + Vector2(0, -150))
+			for k in range(3):
+				await get_tree().create_timer(0.2 if k == 0 else 0.25).timeout
+				await get_tree().process_frame
+				var probe_img := get_viewport().get_texture().get_image()
+				probe_img.save_png("res://screenshot_orb_probe_%d.png" % k)
+				print("DEEPFALL_SCREENSHOT_ORB_PROBE_SAVED k=%d" % k)
 			get_tree().quit()
 			return
 		if "--screenshot-p10-mine" in OS.get_cmdline_user_args():
 			# Phase 10: pickaxe mining shot — mine the solid cell
-			# directly in front of the player twice (crack + clear)
-			# so the frame shows the mining swing + the log line.
+			# directly in front of the player three times (Chunk 2:
+			# crack, heavy crack, clear) so the frame shows the
+			# mining swing + the log line.
 			set_tool("pickaxe")
 			var mcell := Vector2i(-1, -1)
 			for d in [Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1),
@@ -391,6 +661,7 @@ func _ready() -> void:
 					break
 			if mcell.x >= 0:
 				_face_cell(mcell)
+				_mine_at(mcell)
 				_mine_at(mcell)
 				_mine_at(mcell)
 			await get_tree().create_timer(0.2).timeout
@@ -429,9 +700,63 @@ func _ready() -> void:
 			print("DEEPFALL_SCREENSHOT_P10_WALK_SAVED")
 			get_tree().quit()
 			return
+		if "--screenshot-p10-fall" in OS.get_cmdline_user_args():
+			# Chunk 3: fall/land shots — walk until the player leaves the
+			# ground (right first; the spawn platform's right side ends
+			# at a timber post the player walks into, so fall back to
+			# walking left), capture mid-fall, then capture again the
+			# moment the player lands (land squash is 0.13 s).
+			var walked := 0.0
+			player.touch_move = 1.0
+			while player.on_ground and walked < 3.0:
+				await get_tree().create_timer(0.1).timeout
+				walked += 0.1
+			if player.on_ground:
+				player.touch_move = -1.0
+				walked = 0.0
+				while player.on_ground and walked < 3.0:
+					await get_tree().create_timer(0.1).timeout
+					walked += 0.1
+			player.touch_move = 0.0
+			var fall_img := get_viewport().get_texture().get_image()
+			fall_img.save_png("res://screenshot_p10_fall.png")
+			print("DEEPFALL_SCREENSHOT_P10_FALL_SAVED airborne=%s cell=%s" % [str(not player.on_ground), str(player.cell())])
+			var waited := 0.0
+			while not player.on_ground and waited < 2.0:
+				await get_tree().create_timer(0.05).timeout
+				waited += 0.05
+			var land_img := get_viewport().get_texture().get_image()
+			land_img.save_png("res://screenshot_p10_land.png")
+			print("DEEPFALL_SCREENSHOT_P10_LAND_SAVED landed=%s" % str(player.on_ground))
+			get_tree().quit()
+			return
+		if "--screenshot-p10-crouch" in OS.get_cmdline_user_args():
+			# Chunk 3: crouch shot — hold the crouch input so the rig's
+			# crouch pose is live at capture.
+			player.touch_crouch = true
+			await get_tree().create_timer(0.3).timeout
+			var crouch_img := get_viewport().get_texture().get_image()
+			crouch_img.save_png("res://screenshot_p10_crouch.png")
+			print("DEEPFALL_SCREENSHOT_P10_CROUCH_SAVED")
+			get_tree().quit()
+			return
+		if pose_arg != "":
+			# Chunk 3: pose preview for states with no gameplay trigger
+			# yet (climb / swim) — drives the rig pose directly.
+			# Usage: --screenshot --screenshot-pose=climb|swim
+			player.pose_override = pose_arg
+			await get_tree().create_timer(0.3).timeout
+			var pose_img := get_viewport().get_texture().get_image()
+			pose_img.save_png("res://screenshot_p10_pose_%s.png" % pose_arg)
+			print("DEEPFALL_SCREENSHOT_P10_POSE_SAVED pose=%s" % pose_arg)
+			get_tree().quit()
+			return
 		var img := get_viewport().get_texture().get_image()
 		img.save_png("res://screenshot.png")
 		print("DEEPFALL_SCREENSHOT_SAVED")
+		get_tree().quit()
+	elif "--screenshot-chunk2" in OS.get_cmdline_user_args():
+		await _run_screenshot_chunk2()
 		get_tree().quit()
 	elif "--selftest" in OS.get_cmdline_user_args():
 		_run_selftest()
@@ -440,11 +765,38 @@ func _ready() -> void:
 
 # --- Phase 6: world (re)build — generate from seed, apply deltas, render ---
 
-func _rebuild_world(use_save: bool) -> void:
+func _rebuild_world(use_save: bool, staged: bool = false) -> void:
+	# W9 2026-11-14: a rebuild starts a fresh run — run-card state from
+	# the previous run is stale by definition. W8 proved a pending card
+	# survives the rebuild and opens mid-suite / mid-soak, pausing the
+	# tree in a fresh world (12 checks read 0, exit 0); the W9 probe
+	# proves the same through _rebuild_world itself (armA: a card armed
+	# during _ready opens after a fresh rebuild; armB: a stale respawn
+	# timer fires respawn_run in the fresh world; armC: player.dead
+	# survives the no-save branch, which sets position/hp directly
+	# instead of calling respawn_at). Clear it here, at the source, for
+	# every caller (_ready, new_run, selftests, soak, p11/p13). Closing
+	# an open card first also unpauses the tree (show_run_card is the
+	# only pauser). _close_run_card re-arms a 0.05 s respawn when the
+	# player is dead, so the timer zeroing must come after the close.
+	if _card_open:
+		_close_run_card()
+	_respawn_timer = 0.0
+	_card_pending = 0.0
+	_card_reason = ""
+	player.dead = false
+	# staged=true (first start / NEW run) yields between the heavy
+	# phases so the loading screen paints and the phone never sits on
+	# a frozen frame. staged=false (selftest rebuilds) runs fully
+	# synchronously — no await is reached, so callers that do not
+	# await still see the completed rebuild immediately.
 	_clear_dynamic()
-	data = DeepfallMapGen.generate(SEED)
+	_w4_prof_mark("rebuild_clear")
+	data = DeepfallMapGen.generate(run_seed)
+	_w4_prof_mark("rebuild_generate")
 	fg = data["fg"]; wall = data["wall"]
 	_build_polished_chamber()
+	_w4_prof_mark("rebuild_chamber_gen")
 	ore_collected = 0
 	last_ore_name = ""
 	for k in inv.keys():
@@ -455,6 +807,7 @@ func _rebuild_world(use_save: bool) -> void:
 	mine_damage.clear()
 	_mined_cells.clear()
 	_slain_ids.clear()
+	_respawn_at.clear()
 	_props_broken.clear()
 	_props_moved.clear()
 	_run_time = 0.0
@@ -474,17 +827,36 @@ func _rebuild_world(use_save: bool) -> void:
 			_apply_save(d)
 	if not _tileset_built:
 		_build_tileset()
+		_w4_prof_mark("rebuild_tileset")
 		_create_chunk_layers()
 		_tileset_built = true
-	_render_layers()
-	_render_edges()
+		_w4_prof_mark("rebuild_chunks")
+	if staged:
+		_w4_prof_mark("rebuild_pre_await1")
+		await get_tree().process_frame
+		_w4_prof_mark("rebuild_await1")
+	_render_layers_and_edges()
+	_w4_prof_mark("rebuild_layers_edges")
+	# Chunk 8 (b): cosmetic overlay, recomputed from neighbours over the
+	# whole world on every rebuild (and per-cell on every mine, below).
+	_render_overlays()
+	_w4_prof_mark("rebuild_overlays")
+	if staged:
+		_w4_prof_mark("rebuild_pre_await2")
+		await get_tree().process_frame
+		_w4_prof_mark("rebuild_await2")
 	_restore_damage_overlays()
+	_w4_prof_mark("rebuild_pre_props")
 	_render_props()
+	_w4_prof_mark("rebuild_props_only")
 	_render_chamber()
+	_w4_prof_mark("rebuild_chamber_only")
 	_restore_pending_torches()
 	_restore_pending_lanterns()
 	_restore_pending_workbenches()
+	_w4_prof_mark("rebuild_props")
 	_build_enemy_spawn_table()
+	_w4_prof_mark("rebuild_enemies")
 	if _enemies_node == null:
 		_enemies_node = Node2D.new()
 		_enemies_node.name = "Enemies"
@@ -505,12 +877,21 @@ func _rebuild_world(use_save: bool) -> void:
 		player.position = Vector2((spawn.x + 0.5) * TILE, (spawn.y + 0.5) * TILE)
 		player.hp = player.max_hp
 	player.fg = fg
+	# Chunk 2: the player reads slope floors from the same dict the
+	# renderer uses (same reference — _mine_at erasing a slope cell
+	# propagates to the player without a re-mirror).
+	player.slopes = slopes
 	player.main_node = self
 	_ensure_fx()
 	_spawn_phys_props()
 	# Player must be positioned BEFORE chunk activation, or the first
 	# active set is computed from the (0, 0) default position.
 	_apply_chunk_visibility(true)
+	_w4_prof_mark("rebuild_stream")
+	if staged:
+		_w4_prof_mark("rebuild_pre_await3")
+		await get_tree().process_frame
+		_w4_prof_mark("rebuild_await3")
 
 func _clear_dynamic() -> void:
 	if _chunks_created:
@@ -521,6 +902,8 @@ func _clear_dynamic() -> void:
 		for l in _edge_layers:
 			l.clear()
 		for l in _damage_layers:
+			l.clear()
+		for l in _overlay_layers:
 			l.clear()
 		for c in _prop_chunks:
 			for child in c.get_children():
@@ -584,22 +967,31 @@ func _load_save_dict() -> Dictionary:
 	return {}
 
 func _apply_save(d: Dictionary) -> void:
-	if int(d.get("version", 0)) != SAVE_VERSION or int(d.get("seed", 0)) != SEED:
+	if int(d.get("version", 0)) != SAVE_VERSION or int(d.get("seed", 0)) != run_seed:
 		print("DEEPFALL_SAVE_IGNORED version/seed mismatch")
 		return
 	ore_collected = int(d.get("ore", 0))
 	torches_held = int(d.get("torches_held", 3))
 	kills = int(d.get("kills", 0))
 	extracted = bool(d.get("extracted", false))
+	skeleton_unlocked = bool(d.get("skeleton_unlocked", false))
 	for key in d.get("mined", []):
 		var c := _key_to_cell(String(key))
-		if c.x >= 0 and c.x < 80 and c.y >= 0 and c.y < 45:
+		if c.x >= 0 and c.x < DeepfallMapGen.W and c.y >= 0 and c.y < DeepfallMapGen.H:
 			fg[c.y][c.x] = 0
 			_mined_cells[c] = true
 	for key in d.get("cracked", []):
 		var c2 := _key_to_cell(String(key))
-		if c2.x >= 0 and c2.x < 80 and c2.y >= 0 and c2.y < 45 and fg[c2.y][c2.x] != 0:
+		if c2.x >= 0 and c2.x < DeepfallMapGen.W and c2.y >= 0 and c2.y < DeepfallMapGen.H and fg[c2.y][c2.x] != 0:
 			mine_damage[c2] = 1
+	# Chunk 2: stage-2 cracks ride in a separate list ("cracked2").
+	# Old saves have no such key — they load exactly as before, all
+	# stage 1. SAVE_VERSION stays 8 (additive optional field, same
+	# precedent as the Phase 10 "tool" field).
+	for key in d.get("cracked2", []):
+		var c3 := _key_to_cell(String(key))
+		if c3.x >= 0 and c3.x < DeepfallMapGen.W and c3.y >= 0 and c3.y < DeepfallMapGen.H and fg[c3.y][c3.x] != 0:
+			mine_damage[c3] = 2
 	_slain_ids.clear()
 	for sid in d.get("slain", []):
 		_slain_ids[int(sid)] = true
@@ -613,6 +1005,11 @@ func _apply_save(d: Dictionary) -> void:
 		_props_moved[int(k)] = Vector2(float(pm[k][0]), float(pm[k][1]))
 	var st: Dictionary = d.get("stats", {})
 	_run_time = float(st.get("time", 0.0))
+	# Chunk 1: respawn timers are not saved; re-arm every slain foe
+	# 60 s after the loaded run time.
+	_respawn_at.clear()
+	for sid in _slain_ids.keys():
+		_respawn_at[int(sid)] = _run_time + 60.0
 	_max_depth = int(st.get("max_depth", 0))
 	_props_smashed = int(st.get("props_smashed", 0))
 	_deaths = int(st.get("deaths", 0))
@@ -660,8 +1057,12 @@ func save_game(reason: String) -> void:
 	for c in _mined_cells.keys():
 		mined_keys.append(_cell_key(c))
 	var cracked_keys: Array = []
+	var cracked2_keys: Array = []
 	for c in mine_damage.keys():
-		cracked_keys.append(_cell_key(c))
+		if int(mine_damage[c]) >= 2:
+			cracked2_keys.append(_cell_key(c))
+		else:
+			cracked_keys.append(_cell_key(c))
 	var torch_dict := {}
 	for key in torches.keys():
 		torch_dict[_cell_key(key)] = _cell_key(torches[key].get_meta("support"))
@@ -683,12 +1084,14 @@ func save_game(reason: String) -> void:
 	var moved_dict := {}
 	for pid in _props_moved.keys():
 		moved_dict[str(pid)] = [(_props_moved[pid] as Vector2).x, (_props_moved[pid] as Vector2).y]
-	var d := {"version": SAVE_VERSION, "seed": SEED,
+	var d := {"version": SAVE_VERSION, "seed": run_seed,
 		"player": {"x": player.position.x, "y": player.position.y, "hp": player.hp},
 		"class": player.class_id,
 		"tool": tool,
 		"ore": ore_collected, "torches_held": torches_held, "kills": kills,
-		"extracted": extracted, "mined": mined_keys, "cracked": cracked_keys,
+		"extracted": extracted, "skeleton_unlocked": skeleton_unlocked,
+		"mined": mined_keys, "cracked": cracked_keys,
+		"cracked2": cracked2_keys,
 		"torches": torch_dict, "slain": slain_list,
 		"inventory": inv.duplicate(), "lanterns": lantern_dict, "workbenches": bench_dict,
 		"props_broken": broken_list, "props_moved": moved_dict,
@@ -707,8 +1110,14 @@ func save_game(reason: String) -> void:
 
 func new_run() -> void:
 	DirAccess.remove_absolute(SAVE_PATH)
-	print("DEEPFALL_NEW_RUN save cleared, regenerating clean")
-	_rebuild_world(false)
+	# Phase 14: a new run is a NEW cave — fresh random seed every time.
+	randomize()
+	run_seed = randi_range(10000000, 99999999)
+	print("DEEPFALL_NEW_RUN save cleared, new seed=%d, regenerating clean" % run_seed)
+	_show_loading("DIGGING A NEW CAVE…")
+	await get_tree().process_frame
+	await _rebuild_world(false, true)
+	_hide_loading()
 	_show_class_select(true)
 	print("DEEPFALL_NEW_RUN done")
 
@@ -736,6 +1145,9 @@ func _edge_layer_for(c: Vector2i) -> TileMapLayer:
 
 func _damage_layer_for(c: Vector2i) -> TileMapLayer:
 	return _damage_layers[_chunk_id_for_cell(c)]
+
+func _overlay_layer_for(c: Vector2i) -> TileMapLayer:
+	return _overlay_layers[_chunk_id_for_cell(c)]
 
 func _prop_node_for_cell(c: Vector2i) -> Node2D:
 	return _prop_chunks[_chunk_id_for_cell(c)]
@@ -769,6 +1181,14 @@ func _create_chunk_layers() -> void:
 		dl.name = "DamageChunk%d" % i
 		add_child(dl)
 		_damage_layers.append(dl)
+		# Chunk 8 (b): cosmetic overlay layer, above damage (z 3).
+		# No collision, no gameplay reads — purely visual.
+		var ol := TileMapLayer.new()
+		ol.tile_set = _overlay_tileset
+		ol.z_index = 3
+		ol.name = "OverlayChunk%d" % i
+		add_child(ol)
+		_overlay_layers.append(ol)
 		var pc := Node2D.new()
 		pc.name = "PropChunk%d" % i
 		pc.z_index = 1
@@ -792,6 +1212,7 @@ func _apply_chunk_visibility(force := false) -> void:
 			_wall_layers[chunk_id].visible = active
 			_edge_layers[chunk_id].visible = active
 			_damage_layers[chunk_id].visible = active
+			_overlay_layers[chunk_id].visible = active
 			_prop_chunks[chunk_id].visible = active
 			# Phase 10 perf: hidden chunks cost no draw calls, but
 			# their CPUParticles2D embers kept SIMULATING while
@@ -807,11 +1228,14 @@ func _apply_chunk_visibility(force := false) -> void:
 				loaded += 1
 	_loaded_chunk_count = loaded
 	_refresh_enemies_for_chunks()
-	print("DEEPFALL_CHUNK stream=%s loaded=%d/15" % [str(sc), loaded])
+	print("DEEPFALL_CHUNK stream=%s loaded=%d/%d" % [str(sc), loaded, STREAM_TOTAL])
 
 func _restore_damage_overlays() -> void:
+	# Chunk 2: stage-aware — stage 1 restores the cracked tile (0,0),
+	# stage 2 the heavily-cracked tile (1,0).
 	for cell in mine_damage.keys():
-		_damage_layer_for(cell).set_cell(cell, 0, Vector2i(0, 0))
+		var stage: int = int(mine_damage[cell])
+		_damage_layer_for(cell).set_cell(cell, 0, Vector2i(1, 0) if stage >= 2 else Vector2i(0, 0))
 
 func _restore_pending_torches() -> void:
 	for t in _pending_torches:
@@ -831,32 +1255,29 @@ func _restore_pending_workbenches() -> void:
 # --- Phase 5: enemies (Phase 6: spawn table + chunk-gated live set) ---
 
 func _build_enemy_spawn_table() -> void:
-	# Deterministic from SEED + 5000: same seed = same spawn table, so
+	# Deterministic from run_seed + 5000: same seed = same spawn table, so
 	# a chunk reload or a player-death respawn re-derives the same set.
 	# The table is the source of truth; _refresh_enemies_for_chunks()
 	# decides which of them are live right now. Slain ids stay dead.
 	_enemy_spawns.clear()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = SEED + 5000
+	rng.seed = run_seed + 5000
 	var spawn: Vector2i = data["spawn"]
 	var exit_cell: Vector2i = data["exit"]
 	var rooms: Array = data["rooms"]
-	# 5 of rooms 1..13, 2 enemies each = 10 total.
-	var room_idx: Array = []
-	for i in range(1, rooms.size()):
-		room_idx.append(i)
-	# Fisher-Yates with the seeded rng (not Array.shuffle, which uses
-	# the global RNG) so the chosen rooms are deterministic per seed.
-	for i in range(room_idx.size() - 1, 0, -1):
-		var j: int = rng.randi_range(0, i)
-		var tmp: int = room_idx[i]
-		room_idx[i] = room_idx[j]
-		room_idx[j] = tmp
-	var chosen: Array = room_idx.slice(0, 5)
+	# Chunk 1 (2026-11-14): density floor — EVERY room gets foes
+	# (was 12 of rooms 1..39, 2 each = 26 total, so 28 rooms sat
+	# empty forever and the Nov 9 soak read foes=0 for 150 s once
+	# its camped room was exhausted). 2 per room, 3 in deep rooms
+	# (top row > 60). Room-local behaviour is unchanged: foes still
+	# wander/aggro inside their own room only.
 	var next_id := 0
-	for ri in chosen:
+	for ri in range(1, rooms.size()):
 		var r: Array = rooms[ri]
-		for k in range(2):
+		# W2 opt-B: deep rooms (top row > 60) get one extra foe.
+		# Deterministic per seed; map structure untouched.
+		var per_room := 3 if int(r[1]) > 60 else 2
+		for k in range(per_room):
 			var slug: String = ENEMY_SLUGS[rng.randi_range(0, ENEMY_SLUGS.size() - 1)]
 			var cell := _pick_enemy_cell(r, rng, spawn, exit_cell)
 			if cell == Vector2i(-1, -1):
@@ -873,7 +1294,7 @@ func _pick_enemy_cell(r: Array, rng: RandomNumberGenerator, spawn: Vector2i, exi
 			var c := Vector2i(x, y)
 			if fg[y][x] != 0:
 				continue  # must be an air cell
-			if y + 1 >= 45:
+			if y + 1 >= DeepfallMapGen.H:
 				continue
 			var below: int = fg[y + 1][x]
 			if below == 0:
@@ -920,6 +1341,18 @@ func _refresh_enemies_for_chunks() -> void:
 func _foes_remaining() -> int:
 	return _enemy_spawns.size() - _slain_ids.size()
 
+func _spawn_cell_for_id(sid: int) -> Vector2i:
+	for s in _enemy_spawns:
+		if int(s["id"]) == sid:
+			return s["cell"]
+	return Vector2i(-1, -1)
+
+func _spawn_slug_for_id(sid: int) -> String:
+	for s in _enemy_spawns:
+		if int(s["id"]) == sid:
+			return String(s["slug"])
+	return "?"
+
 func _spawn_one(slug: String, cell: Vector2i, spawn_id := -1) -> void:
 	var e: Node2D = ENEMY_SCRIPT.new()
 	e.setup(slug, fg, player, self)
@@ -936,6 +1369,8 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	_grant_enemy_drop(enemy)
 	if enemy.spawn_id >= 0:
 		_slain_ids[enemy.spawn_id] = true
+		# Chunk 1: the foe returns 60 s after death (see _process).
+		_respawn_at[enemy.spawn_id] = _run_time + 60.0
 	print("DEEPFALL_ENEMY_SLAIN slug=%s remaining=%d" % [enemy.slug, _foes_remaining()])
 	log_event("Slain %s" % enemy.slug)
 	save_game("kill")
@@ -1060,15 +1495,63 @@ func _make_effekseer_emitter(effect_path: String, pos: Vector2, life: float) -> 
 func _spawn_orb_impact(pos: Vector2) -> void:
 	# Phase 9b: Effekseer mage_orb_impact replaces the PNG burst when the
 	# plugin is present; the staged frost-burst frames are the fallback.
-	if _make_effekseer_emitter(ORB_IMPACT_EFK, pos, 0.8) != null:
-		return
+	# Chunk 3: the emitter (and the fallback sprite) render at _orb_scale.
+	# --orb-fallback skips the emitter: the effect renders no pixels under
+	# the sandbox software renderer, so the A/B capture uses the fallback.
+	if not _orb_force_fallback:
+		var em := _make_effekseer_emitter(ORB_IMPACT_EFK, pos, 0.8)
+		if em != null:
+			em.scale = Vector2(_orb_scale, _orb_scale)
+			return
 	var spr := Sprite2D.new()
 	var frames := _orb_impact_frames_loaded()
 	spr.texture = frames[0]
-	spr.scale = Vector2(0.5, 0.5)
+	spr.scale = Vector2(0.5, 0.5) * _orb_scale
 	spr.position = pos
 	add_child(spr)
 	_orb_fx.append({"node": spr, "frames": frames, "t": 0.0, "dur": 0.25, "fade": false})
+
+# Chunk 4: staged effect GIFs, sliced by build_chunk4_effects.py into
+# assets/effects/<name>_<i>.png (128x128, palette 0 = transparent).
+# Played as frame-flip Sprite2Ds through the same _orb_fx list the orb
+# impact already uses, so they cost one node per burst and fade out
+# over `dur`. Unknown kinds load zero frames and the spawn is a no-op,
+# never a crash. Wired triggers: ember-burst on torch place (+ a
+# continuous CPUParticles2D ember at every torch, see _place_torch_at),
+# smoke-puff as mining dust in _mine_at, spore-puff as ambient motes
+# at crystal clusters (see _make_crystal_at). The other 8 kinds are
+# sliced and loadable through this same spawner for later chunks.
+const STAGED_FX_FRAMES := {
+	"ember-burst": 3, "smoke-puff": 4, "spore-puff": 3, "explosion": 3,
+	"frost-burst": 3, "impact-sparks": 3, "acid-splash": 3,
+	"heal-sparkle": 4, "muzzle-flash": 3, "slash-arc": 4,
+	"void-implosion": 3,
+}
+var _staged_fx_cache: Dictionary = {}
+
+func _staged_frames(kind: String) -> Array:
+	if _staged_fx_cache.has(kind):
+		return _staged_fx_cache[kind]
+	var frames: Array = []
+	var n: int = int(STAGED_FX_FRAMES.get(kind, 0))
+	for i in range(n):
+		var tex: Texture2D = load("res://assets/effects/%s_%d.png" % [kind, i])
+		if tex != null:
+			frames.append(tex)
+	_staged_fx_cache[kind] = frames
+	return frames
+
+func _spawn_staged_burst(pos: Vector2, kind: String, scale := 0.5, dur := 0.35, tint := Color(1, 1, 1, 1)) -> void:
+	var frames := _staged_frames(kind)
+	if frames.is_empty():
+		return
+	var spr := Sprite2D.new()
+	spr.texture = frames[0]
+	spr.scale = Vector2(scale, scale)
+	spr.modulate = tint
+	spr.position = pos
+	add_child(spr)
+	_orb_fx.append({"node": spr, "frames": frames, "t": 0.0, "dur": dur, "fade": true})
 
 func _spawn_orb_trail_dot(pos: Vector2) -> void:
 	var dot := Polygon2D.new()
@@ -1093,7 +1576,10 @@ func _update_fx(delta: float) -> void:
 		if not frames.is_empty():
 			var idx: int = mini(int(float(fx["t"]) * 12.0), frames.size() - 1)
 			(node as Sprite2D).texture = frames[idx]
-		elif bool(fx["fade"]):
+		# Chunk 4: fade applies alongside the frame flip now (was an
+		# elif, so framed bursts popped out at full alpha when freed).
+		# Orb impacts pass fade=false, so they are unchanged.
+		if bool(fx["fade"]):
 			node.modulate = Color(1, 1, 1, clampf(1.0 - float(fx["t"]) / float(fx["dur"]), 0.0, 1.0))
 		if float(fx["t"]) >= float(fx["dur"]):
 			_orb_fx.erase(fx)
@@ -1129,7 +1615,7 @@ func _update_orbs(delta: float) -> void:
 					break
 		var cell := Vector2i(int(floor(orb.position.x / TILE)),
 			int(floor(orb.position.y / TILE)))
-		if not hit and (cell.x < 0 or cell.x >= 80 or cell.y < 0 or cell.y >= 45
+		if not hit and (cell.x < 0 or cell.x >= DeepfallMapGen.W or cell.y < 0 or cell.y >= DeepfallMapGen.H
 				or (fg[cell.y][cell.x] != 0 and fg[cell.y][cell.x] != 7)):
 			hit = true  # orb dies on a solid block (platforms do not stop it)
 		if hit or float(o["travelled"]) >= ORB_RANGE:
@@ -1163,7 +1649,7 @@ func respawn_run() -> void:
 func _find_air_cell_in_chunk(sc: Vector2i) -> Vector2i:
 	for y in range(sc.y * STREAM, sc.y * STREAM + STREAM):
 		for x in range(sc.x * STREAM, sc.x * STREAM + STREAM):
-			if y + 1 >= 45:
+			if y + 1 >= DeepfallMapGen.H:
 				continue
 			if fg[y][x] == 0 and fg[y + 1][x] != 0:
 				return Vector2i(x, y)
@@ -1172,6 +1658,50 @@ func _find_air_cell_in_chunk(sc: Vector2i) -> Vector2i:
 			if fg[y][x] == 0:
 				return Vector2i(x, y)
 	return Vector2i(-1, -1)
+
+func _run_screenshot_c4() -> void:
+	# Chunk 4 evidence shot (--screenshot --screenshot-c4): teleport
+	# to the first crystal cluster, place a torch beside the player
+	# (ember burst + continuous embers), mine one hit on the nearest
+	# solid cell (dust puff), fire a spore burst at the crystal —
+	# capture with all three staged effects live, the crystal light
+	# on, and the top-corner foreground framing in frame.
+	if _crystal_cells.is_empty():
+		print("DEEPFALL_SCREENSHOT_C4 NO_CRYSTALS")
+		return
+	var c0: Vector2i = _crystal_cells[0]
+	player.position = Vector2((c0.x + 0.5) * TILE, (c0.y + 0.5) * TILE)
+	player.vel = Vector2.ZERO
+	await get_tree().create_timer(1.0).timeout
+	var tc := _try_place_torch_here()
+	if tc.x < 0:
+		# Fallback: any air cell with solid below within 3 cells of
+		# the player (the facing candidates can all miss when the
+		# crystal hangs over a shaft).
+		for dy in range(-1, 2):
+			for dx in range(-3, 4):
+				var cand: Vector2i = player.cell() + Vector2i(dx, dy)
+				var sup: Vector2i = cand + Vector2i(0, 1)
+				if _place_torch_at(cand, sup):
+					tc = cand
+					break
+			if tc.x >= 0:
+				break
+	var solid := Vector2i(-1, -1)
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var n: Vector2i = player.cell() + d
+		if n.x >= 0 and n.x < DeepfallMapGen.W and n.y >= 0 and n.y < DeepfallMapGen.H and fg[n.y][n.x] != 0 and fg[n.y][n.x] != 7:
+			solid = n
+			break
+	if solid.x >= 0:
+		_mine_at(solid)
+	_spawn_staged_burst(Vector2((c0.x + 0.5) * TILE, (c0.y + 0.5) * TILE), "spore-puff", 0.6, 0.4)
+	if tc.x >= 0:
+		_spawn_staged_burst(Vector2((tc.x + 0.5) * TILE, (tc.y + 0.5) * TILE), "ember-burst", 0.6, 0.35)
+	await get_tree().create_timer(0.12).timeout
+	var img := get_viewport().get_texture().get_image()
+	img.save_png("res://screenshot_c4.png")
+	print("DEEPFALL_SCREENSHOT_C4_SAVED crystal=%s torch=%s mined=%s" % [str(c0), str(tc), str(solid)])
 
 func _run_screenshot_pair() -> void:
 	# --screenshot-pair: shot 1 spawn chamber (torch lit here), shot 2
@@ -1202,6 +1732,11 @@ func _run_selftest() -> void:
 	# next to the player, forces a melee strike and an enemy hit, then
 	# runs the Phase 6 chunk/delta/save checks, prints DEEPFALL_SELFTEST
 	# lines and quits. Never runs in normal play.
+	# Phase 14: force the pickaxe first. _ready loads the save, and a
+	# previous run ends with the sword equipped (Phase 10j) — without
+	# this, the Phase 6/7 mining tests fail with "Need pickaxe to
+	# mine" whenever a save exists, making the suite order-dependent.
+	set_tool("pickaxe")
 	await get_tree().create_timer(0.5).timeout
 	var cell: Vector2i = player.cell() + Vector2i(1, 0)
 	_spawn_one("miner-ghoul", cell)
@@ -1214,22 +1749,30 @@ func _run_selftest() -> void:
 	print("DEEPFALL_SELFTEST player_hp_after_enemy_hit=%d (expect 92)" % player.hp)
 	# Finish the ghoul off and confirm the kill count + death path.
 	# (Test ghoul has spawn_id -1: it is not in the spawn table, so it
-	# does not consume a delta slot; foes remaining stays 10.)
+	# does not consume a delta slot; foes remaining stays at the
+	# spawn-table size — 24 max, fewer if a room pick found no cell.)
 	ghoul.take_hit(99, player.position.x)
-	print("DEEPFALL_SELFTEST kills=%d foes_remaining=%d (expect 1, 10)" % [kills, _foes_remaining()])
+	print("DEEPFALL_SELFTEST kills=%d foes_remaining=%d (expect 1, %d)" % [kills, _foes_remaining(), _enemy_spawns.size()])
 	_run_selftest_phase6()
 	_run_selftest_phase7()
 	_run_selftest_phase8()
 	await _run_selftest_phase9()
 	await _run_selftest_phase9b()
 	await _run_selftest_phase10()
+	await _run_selftest_phase4()
+	# Chunk 2 runs last: it teleports the player and mines cells, so
+	# no later phase may depend on the pre-chunk2 world state.
+	_run_selftest_chunk2()
+	_run_selftest_chunk8()
 	print("DEEPFALL_SELFTEST done")
 	get_tree().quit()
 
 func _run_selftest_phase6() -> void:
 	print("DEEPFALL_SELFTEST_PHASE6 start")
 	var spawn: Vector2i = data["spawn"]
-	# (a) Mine a solid cell in the player's stream chunk, twice.
+	# (a) Mine a solid cell in the player's stream chunk, three times
+	# (Chunk 2: 3-hit mining — hit 1 cracks, hit 2 heavily cracks,
+	# hit 3 breaks; each stage's overlay atlas coords are asserted).
 	var sc0 := _stream_chunk_of(player.cell())
 	var test_cell := Vector2i(-1, -1)
 	for y in range(sc0.y * STREAM, sc0.y * STREAM + STREAM):
@@ -1244,11 +1787,13 @@ func _run_selftest_phase6() -> void:
 		print("DEEPFALL_SELFTEST_PHASE6 a FAIL no solid test cell in stream chunk %s" % str(sc0))
 		return
 	_mine_at(test_cell)
-	var cracked_ok: bool = mine_damage.has(test_cell)
+	var cracked_ok: bool = mine_damage.has(test_cell) and int(mine_damage[test_cell]) == 1 and _damage_layer_for(test_cell).get_cell_atlas_coords(test_cell) == Vector2i(0, 0)
+	_mine_at(test_cell)
+	var cracked2_ok: bool = mine_damage.has(test_cell) and int(mine_damage[test_cell]) == 2 and _damage_layer_for(test_cell).get_cell_atlas_coords(test_cell) == Vector2i(1, 0)
 	_mine_at(test_cell)
 	var mined_ok: bool = fg[test_cell.y][test_cell.x] == 0 and _mined_cells.has(test_cell) and _fg_layer_for(test_cell).get_cell_source_id(test_cell) == -1
-	print("DEEPFALL_SELFTEST_PHASE6 a cell=%s cracked_first=%s mined=%s layer_erased=%s" % [
-		str(test_cell), str(cracked_ok), str(mined_ok),
+	print("DEEPFALL_SELFTEST_PHASE6 a cell=%s cracked_first=%s cracked_second=%s mined=%s layer_erased=%s" % [
+		str(test_cell), str(cracked_ok), str(cracked2_ok), str(mined_ok),
 		str(_fg_layer_for(test_cell).get_cell_source_id(test_cell) == -1)])
 	# Leave the chunk: teleport to a far chunk (4,0), force a chunk update.
 	var far_cell := _find_air_cell_in_chunk(Vector2i(4, 0))
@@ -1269,7 +1814,12 @@ func _run_selftest_phase6() -> void:
 		str(fg[test_cell.y][test_cell.x] == 0), str(_fg_layers[old_id].visible),
 		str(_fg_layer_for(test_cell).get_cell_source_id(test_cell) == -1)])
 	# (c) Cross the x=20 legacy chunk boundary and the x=16 stream boundary.
+	# Phase 14: the expected stream row derives from the spawn row
+	# (spawn.y / 16) — the old hardcoded row 1 was the 45-row world's
+	# spawn depth; the 90-row world spawns deeper (row 2 for seed
+	# 20261101). The x-crossing is what this check is really about.
 	var row_y: float = (spawn.y + 0.5) * TILE
+	var stream_row: int = spawn.y / STREAM
 	player.position = Vector2(15.5 * TILE, row_y)
 	_apply_chunk_visibility(true)
 	var leg_before: int = clampi(int(player.cell().x) / CHUNK_W, 0, 3)
@@ -1281,8 +1831,8 @@ func _run_selftest_phase6() -> void:
 	player.position = Vector2(16.5 * TILE, row_y)
 	_apply_chunk_visibility(true)
 	var stream_mid := _stream_chunk_of(player.cell())
-	print("DEEPFALL_SELFTEST_PHASE6 c legacy_chunk %d->%d (expect 0->1) stream %s->%s (expect (0,1)->(1,1)) stream_at_16.5=%s" % [
-		leg_before, leg_after, str(stream_before), str(stream_after), str(stream_mid)])
+	print("DEEPFALL_SELFTEST_PHASE6 c legacy_chunk %d->%d (expect 0->1) stream %s->%s (expect (0,%d)->(1,%d)) stream_at_16.5=%s" % [
+		leg_before, leg_after, str(stream_before), str(stream_after), stream_row, stream_row, str(stream_mid)])
 	# (b) Place a torch, save, rebuild from the save file in-process.
 	player.position = Vector2((spawn.x + 0.5) * TILE, (spawn.y + 0.5) * TILE)
 	player.vel = Vector2.ZERO
@@ -1299,8 +1849,8 @@ func _run_selftest_phase6() -> void:
 		str(fg[test_cell.y][test_cell.x] == 0), str(torch_cell), str(torch_ok),
 		str(player.position == saved_pos), player.hp, ore_collected])
 	print("DEEPFALL_SELFTEST_PHASE6 done a=%s a3=%s c_legacy=%s c_stream=%s b=%s" % [
-		str(mined_ok), str(back_ok), str(leg_before == 0 and leg_after == 1),
-		str(stream_before == Vector2i(0, 1) and stream_after == Vector2i(1, 1)), str(b_ok and torch_ok)])
+		str(mined_ok and cracked_ok and cracked2_ok), str(back_ok), str(leg_before == 0 and leg_after == 1),
+		str(stream_before == Vector2i(0, stream_row) and stream_after == Vector2i(1, stream_row)), str(b_ok and torch_ok)])
 
 func _run_selftest_load() -> void:
 	# Fresh-process reload check (--selftest-load): the world was built
@@ -1326,7 +1876,12 @@ func _run_selftest_load() -> void:
 			print("DEEPFALL_SELFTEST_LOAD FAIL torch %s missing" % str(c2))
 	var pd: Dictionary = d.get("player", {})
 	var expect_pos := Vector2(float(pd.get("x", 0.0)), float(pd.get("y", 0.0)))
-	var pos_ok: bool = player.position == expect_pos
+	# Tolerance, not exact equality: the save can capture the player
+	# mid-settle (respawn/_apply_save place the centre 8 px sunk into
+	# the floor; physics lifts them to standing height within a frame
+	# or two). Same cell, 8 px up — a real mis-restore would be a
+	# whole cell (64 px) or more away.
+	var pos_ok: bool = player.position.distance_to(expect_pos) < 16.0
 	var hp_ok: bool = player.hp == int(pd.get("hp", 100))
 	var ore_ok: bool = ore_collected == int(d.get("ore", 0))
 	if not pos_ok or not hp_ok or not ore_ok:
@@ -1381,7 +1936,7 @@ func _build_polished_chamber() -> void:
 				fg[plat_y][xx] = 7
 	# Mining pocket + connected ore vein, carved into the right wall.
 	var px: int = rx + rw
-	if px + 2 < 80:
+	if px + 2 < DeepfallMapGen.W:
 		for py in [floor_y - 2, floor_y - 1]:
 			if py >= 0 and fg[py][px] != 0:
 				fg[py][px] = 0
@@ -1397,8 +1952,37 @@ func _build_polished_chamber() -> void:
 	for py in [floor_y - 2, floor_y - 1]:
 		if rx - 1 >= 0 and fg[py][rx - 1] != 0:
 			fg[py][rx - 1] = 10
+	# Chunk 2: test staircase + half-block landing, built INTO the
+	# seeded world (same determinism rule as the platform row). Three
+	# stone slopes rise right from the room floor to the platform row:
+	# S1 (rx+rw-3, floor_y-1), S2 (rx+rw-2, floor_y-2),
+	# S3 (rx+rw-1, floor_y-3); S3's top meets the platform row's top
+	# exactly, so the player walks from the stairs onto the platforms.
+	# A stone half-block at (rx+rw-6, floor_y-1) is the 32 px step-up
+	# check. Slopes live in AIR cells only (fg untouched) and are
+	# re-derived every rebuild — no save data, no map-gen change. A
+	# cell is placed only if it is air here; on seeds where a cell is
+	# solid or a platform, that step is skipped, never forced.
+	# Verified AIR for seed 20261101 (rooms[0] = [6, 40, 9, 6]).
+	slopes.clear()
+	var stair_x: int = rx + rw - 3
+	if stair_x > rx + 2 and floor_y - 3 > ry:
+		var stair_cells: Array = [
+			[Vector2i(stair_x, floor_y - 1), SLOPE_RISE_RIGHT, "stone"],
+			[Vector2i(stair_x + 1, floor_y - 2), SLOPE_RISE_RIGHT, "stone"],
+			[Vector2i(stair_x + 2, floor_y - 3), SLOPE_RISE_RIGHT, "stone"],
+			[Vector2i(stair_x - 3, floor_y - 1), SLOPE_HALF, "stone"],
+		]
+		for sc in stair_cells:
+			var cell: Vector2i = sc[0]
+			if fg[cell.y][cell.x] == 0:
+				slopes[cell] = {"shape": sc[1], "mat": sc[2]}
+		print("DEEPFALL_CHUNK2_SLOPES placed=%d of 4 (seed=%d)" % [slopes.size(), run_seed])
 
 func _render_chamber() -> void:
+	# W4: textures loaded once per rebuild, not once per prop.
+	var post_tex: Texture2D = load("res://assets/atlas3/timber_post.png")
+	var torch_tex: Texture2D = load("res://assets/torch.png")
 	# Visual chamber furniture, called after _render_props. All visual
 	# only; no collision, never on spawn/exit cells. Props are added to
 	# their chunk container (Phase 6) so they stream with the chunk.
@@ -1411,7 +1995,7 @@ func _render_chamber() -> void:
 	var midx: int = rx + rw / 2
 	for sx in [midx - 2, midx + 2]:
 		var post := Sprite2D.new()
-		post.texture = load("res://assets/atlas3/timber_post.png")
+		post.texture = post_tex
 		post.scale = Vector2(128.0 / 766.0, 128.0 / 766.0)
 		post.position = Vector2(sx * TILE + 32, (floor_y - 2) * TILE + 64)
 		post.z_index = 1
@@ -1454,9 +2038,20 @@ func _render_chamber() -> void:
 	_add_prop(spire_light, Vector2i(rx + 2, floor_y - 1))
 	# Two static warm chamber lights (not pickable torches — they are
 	# not in the torches dict, so click-pickup does not touch them).
+	# W3 fix: the cell at floor_y-2 is no longer guaranteed free —
+	# climb ledges can occupy it (seed 20261101: the shaft mouth by
+	# spawn puts a platform at the left light's cell, and the old
+	# silent skip dropped the chamber to 1 light / 6 embers, failing
+	# the Phase 10 check). Scan a few rows for a free cell instead;
+	# the light still hangs in the chamber, just a row up or down.
 	for lx in [rx + 2, rx + rw - 3]:
-		var lc := Vector2i(lx, floor_y - 2)
-		if fg[floor_y - 2][lx] != 0:
+		var lc := Vector2i(-1, -1)
+		for dy in [0, -1, 1, -2]:
+			var try_cell := Vector2i(lx, floor_y - 2 + dy)
+			if try_cell.y >= 0 and try_cell.y < DeepfallMapGen.H and fg[try_cell.y][lx] == 0:
+				lc = try_cell
+				break
+		if lc.x < 0:
 			continue
 		var light := PointLight2D.new()
 		light.color = Color(1.0, 0.70, 0.36)
@@ -1467,7 +2062,7 @@ func _render_chamber() -> void:
 		light.position = Vector2((lc.x + 0.5) * TILE, (lc.y + 0.5) * TILE)
 		_add_prop(light, lc)
 		var stick := Sprite2D.new()
-		stick.texture = load("res://assets/torch.png")
+		stick.texture = torch_tex
 		stick.scale = Vector2(0.08, 0.08)
 		stick.position = light.position
 		_add_prop(stick, lc)
@@ -1490,12 +2085,12 @@ func _render_chamber() -> void:
 	# Chunk transition gate: first floor-standing air cell on the x=20
 	# chunk boundary, derived from world coordinates only — streaming
 	# the neighbouring chunk re-derives the same gate, no seam.
-	for yy in range(45):
-		if fg[yy][CHUNK_W] == 0 and fg[yy][CHUNK_W - 1] == 0 and yy + 1 < 45 and fg[yy + 1][CHUNK_W] != 0:
+	for yy in range(DeepfallMapGen.H):
+		if fg[yy][CHUNK_W] == 0 and fg[yy][CHUNK_W - 1] == 0 and yy + 1 < DeepfallMapGen.H and fg[yy + 1][CHUNK_W] != 0:
 			_chamber_gate = Vector2i(CHUNK_W, yy)
 			for gx in [CHUNK_W - 1, CHUNK_W]:
 				var gpost := Sprite2D.new()
-				gpost.texture = load("res://assets/atlas3/timber_post.png")
+				gpost.texture = post_tex
 				gpost.scale = Vector2(96.0 / 766.0, 96.0 / 766.0)
 				gpost.position = Vector2(gx * TILE + 32, yy * TILE + 32)
 				gpost.z_index = 1
@@ -1532,8 +2127,10 @@ func _render_background() -> void:
 	# Atlas-art cave scene as a large backdrop centred on the spawn chamber.
 	# World-space, no parallax; outside its footprint the old fill remains.
 	var spawn_c: Vector2i = data["spawn"]
+	# W4: one load shared by the three backdrop sprites.
+	var cave_tex: Texture2D = load("res://assets/atlas3/cave-silhouettes.png")
 	var cave := Sprite2D.new()
-	cave.texture = load("res://assets/atlas3/cave-silhouettes.png")
+	cave.texture = cave_tex
 	cave.scale = Vector2(0.8, 0.8)
 	cave.position = Vector2((spawn_c.x + 0.5) * TILE, (spawn_c.y + 0.5) * TILE)
 	cave.z_index = 0
@@ -1578,19 +2175,20 @@ func _render_background() -> void:
 	# CanvasModulate darkens this canvas too; effective brightness ends
 	# up comparable to the static layer.
 	_plx_far = Sprite2D.new()
-	_plx_far.texture = load("res://assets/atlas3/cave-silhouettes.png")
+	_plx_far.texture = cave_tex
 	_plx_far.scale = Vector2(1.5, 1.5)
 	_plx_far.modulate = Color(0.35, 0.42, 0.58, 1.0)
 	_plx_far.z_index = -3
 	add_child(_plx_far)
 	_plx_mid = Sprite2D.new()
-	_plx_mid.texture = load("res://assets/atlas3/cave-silhouettes.png")
+	_plx_mid.texture = cave_tex
 	_plx_mid.scale = Vector2(2.0, 2.0)
 	_plx_mid.flip_h = true
 	_plx_mid.modulate = Color(0.5, 0.58, 0.75, 1.0)
 	_plx_mid.z_index = -2
 	add_child(_plx_mid)
 	_update_parallax()
+	_build_foreground_framing()
 
 func _update_torch_lights() -> void:
 	# Phase 10 perf: cap simultaneous real torch PointLight2Ds in view
@@ -1631,20 +2229,113 @@ func _update_parallax() -> void:
 	_last_parallax_cam = cc
 	_plx_far.position = Vector2(-128.0 + cc.x * 0.65, -200.0 + cc.y * 0.65)
 	_plx_mid.position = Vector2(0.0 + cc.x * 0.35, -200.0 + cc.y * 0.35)
+	# Chunk 4: foreground framing drifts at 1.2x (0.2x against the
+	# camera on screen) from the camera centre recorded at build,
+	# clamped to ±48 px so the shapes stay at the viewport corners.
+	if _fg_frames_built:
+		var drift := (cc - _fg_frame_base_cam) * -0.2
+		drift.x = clampf(drift.x, -48.0, 48.0)
+		drift.y = clampf(drift.y, -48.0, 48.0)
+		for f in _fg_frames:
+			(f["node"] as Polygon2D).position = drift
+
+# Chunk 4: foreground framing shapes (VISUAL-SPEC §5.4). Two
+# top-corner rock overhangs, screen-space Polygon2Ds in the scene's
+# Foreground CanvasLayer (layer 2, above the world, below nothing
+# that matters — HUD text is layer 1 and the shapes sit in the
+# corners). Base rects are viewport rects (1280x720); the 1.2x drift
+# is applied as a node offset in _update_parallax(). Colour is the
+# dark rock silhouette of the old bottom wedges (0.05, 0.08, 0.13).
+# Built once — _render_background runs once per launch, and a world
+# rebuild must not duplicate the shapes.
+func _build_foreground_framing() -> void:
+	if _fg_frames_built:
+		return
+	_fg_frames_built = true
+	var fg_layer: CanvasLayer = get_node_or_null("Foreground")
+	if fg_layer == null:
+		return
+	_fg_frame_base_cam = camera.get_screen_center_position() if camera != null else Vector2(640, 360)
+	var defs := [
+		{"name": "FrameTL", "pts": PackedVector2Array([Vector2(0, 0), Vector2(300, 0), Vector2(220, 64), Vector2(110, 108), Vector2(0, 92)])},
+		{"name": "FrameTR", "pts": PackedVector2Array([Vector2(1280, 0), Vector2(980, 0), Vector2(1060, 64), Vector2(1170, 108), Vector2(1280, 92)])},
+	]
+	for d in defs:
+		var poly := Polygon2D.new()
+		poly.name = String(d["name"])
+		poly.polygon = d["pts"]
+		poly.color = Color(0.05, 0.08, 0.13, 1.0)
+		fg_layer.add_child(poly)
+		# Rect2() starts at the origin (0,0), and expand() never
+		# shrinks below it — a zero rect at the origin would make
+		# the TR shape's rect span the whole screen width (0..1280)
+		# and hide on any top-of-screen gameplay. Seed the rect at
+		# the first vertex instead.
+		var pts: PackedVector2Array = d["pts"]
+		var r := Rect2(pts[0], Vector2.ZERO)
+		for p in pts:
+			r = r.expand(p)
+		_fg_frames.append({"node": poly, "base_rect": r, "hidden": false})
+
+# Chunk 4 (VISUAL-SPEC §5.4): a framing shape must never cover the
+# player, an enemy, a torch, or a mineable target for more than a few
+# pixels. Screen-space check every frame: each shape's current rect
+# (base rect + drift) against the screen rects of the player
+# (collision 28x80 + 16 px margin), every live enemy (half extents +
+# 16 px), and every torch (32 px radius). A shape that would cover
+# gameplay hides itself and returns when the overlap clears. Shapes
+# are never repositioned to dodge — hiding preserves the framing
+# contract without moving the goalposts.
+func _update_framing_clearance() -> void:
+	if _fg_frames.is_empty() or camera == null or data.is_empty():
+		return
+	var cc: Vector2 = camera.get_screen_center_position()
+	var origin: Vector2 = cc - Vector2(640, 360)
+	var drift := (cc - _fg_frame_base_cam) * -0.2
+	drift.x = clampf(drift.x, -48.0, 48.0)
+	drift.y = clampf(drift.y, -48.0, 48.0)
+	var blockers: Array = []
+	blockers.append(Rect2(player.position - Vector2(30, 56) - origin, Vector2(60, 112)))
+	for e in enemies:
+		if is_instance_valid(e):
+			var hw: float = float(e.get("half_w")) + 16.0
+			var hh: float = float(e.get("half_h")) + 16.0
+			blockers.append(Rect2(e.position - Vector2(hw, hh) - origin, Vector2(hw * 2.0, hh * 2.0)))
+	for key in torches.keys():
+		var t: Node2D = torches[key]
+		blockers.append(Rect2(t.position - Vector2(32, 32) - origin, Vector2(64, 64)))
+	for f in _fg_frames:
+		var rect: Rect2 = f["base_rect"]
+		rect.position += drift
+		var hide := false
+		for b in blockers:
+			if rect.intersects(b as Rect2):
+				hide = true
+				break
+		var node: Polygon2D = f["node"]
+		node.visible = not hide
+		f["hidden"] = hide
 
 const VARIANT_COUNTS := {"stone": 16, "dirt": 16,
 	"trans_rock_N": 1, "trans_rock_E": 1, "trans_rock_S": 1, "trans_rock_W": 1,
 	"trans_dirt_N": 1, "trans_dirt_E": 1, "trans_dirt_S": 1, "trans_dirt_W": 1,
 	"corner_rock_TL": 1, "corner_rock_TR": 1, "corner_rock_BL": 1, "corner_rock_BR": 1,
-	"corner_dirt_TL": 1, "corner_dirt_TR": 1, "corner_dirt_BL": 1, "corner_dirt_BR": 1}
+	"corner_dirt_TL": 1, "corner_dirt_TR": 1, "corner_dirt_BL": 1, "corner_dirt_BR": 1,
+	"inner_rock_NE": 1, "inner_rock_NW": 1, "inner_rock_SE": 1, "inner_rock_SW": 1,
+	"inner_dirt_NE": 1, "inner_dirt_NW": 1, "inner_dirt_SE": 1, "inner_dirt_SW": 1,
+	"slope_stone_r": 2, "slope_stone_l": 2, "slope_dirt_r": 2, "slope_dirt_l": 2,
+	"slope_brick_r": 1, "slope_brick_l": 1, "slope_grass_r": 2, "slope_grass_l": 2,
+	"slope_obsidian_r": 2, "slope_obsidian_l": 2,
+	"half_stone": 1, "half_dirt": 1, "half_wood": 1,
+	"stairs_stone_r": 1, "stairs_stone_l": 1, "stairs_wood_r": 1, "stairs_wood_l": 1}
 
 func _neighbour_mask(x: int, y: int) -> int:
 	# Topology bits, not randomness: N=1, E=2, S=4, W=8 where the
 	# neighbour is air (inside the world; borders count as solid).
 	var m := 0
 	if y > 0 and fg[y - 1][x] == 0: m += 1
-	if x + 1 < 80 and fg[y][x + 1] == 0: m += 2
-	if y + 1 < 45 and fg[y + 1][x] == 0: m += 4
+	if x + 1 < DeepfallMapGen.W and fg[y][x + 1] == 0: m += 2
+	if y + 1 < DeepfallMapGen.H and fg[y + 1][x] == 0: m += 4
 	if x > 0 and fg[y][x - 1] == 0: m += 8
 	return m
 
@@ -1665,7 +2356,9 @@ func _mat_group(t: int) -> int:
 	return 3
 
 func _build_tileset() -> void:
-	var names: Array = TILE_NAMES + ["dirt-wall", "cave-wall-dark"] + TRANS_NAMES
+	# Atlas columns: 0..12 TILE_NAMES, 13..14 walls, 15..30 TRANS_NAMES,
+	# 31..38 INNER_NAMES, 39..55 SLOPE_NAMES (56 columns total).
+	var names: Array = TILE_NAMES + ["dirt-wall", "cave-wall-dark"] + TRANS_NAMES + INNER_NAMES + SLOPE_NAMES
 	var cols := names.size()
 	var atlas := Image.create(cols * TILE, 16 * TILE, false, Image.FORMAT_RGBA8)
 	for i in range(names.size()):
@@ -1678,9 +2371,13 @@ func _build_tileset() -> void:
 				path = "res://assets/atlas3/dirt_%d.png" % v
 			var tex: Texture2D = load(path)
 			var im: Image = tex.get_image()
-			im.convert(Image.FORMAT_RGBA8)
+			# W4: convert() on an already-RGBA8 image still copies the
+			# whole 64x64; skip it when the format already matches.
+			if im.get_format() != Image.FORMAT_RGBA8:
+				im.convert(Image.FORMAT_RGBA8)
 			atlas.blit_rect(im, Rect2i(0, 0, TILE, TILE), Vector2i(i * TILE, v * TILE))
 	var atlas_tex := ImageTexture.create_from_image(atlas)
+	_w4_prof_mark("rebuild_tileset_main")
 	var tileset := TileSet.new()
 	tileset.tile_size = Vector2i(TILE, TILE)
 	var src := TileSetAtlasSource.new()
@@ -1696,9 +2393,13 @@ func _build_tileset() -> void:
 	for i in range(EDGE_NAMES.size()):
 		var tex: Texture2D = load("res://assets/%s.png" % EDGE_NAMES[i])
 		var im: Image = tex.get_image()
-		im.convert(Image.FORMAT_RGBA8)
+		# W4: convert() on an already-RGBA8 image still copies the
+		# whole 64x64; skip it when the format already matches.
+		if im.get_format() != Image.FORMAT_RGBA8:
+			im.convert(Image.FORMAT_RGBA8)
 		eatlas.blit_rect(im, Rect2i(0, 0, TILE, TILE), Vector2i(i * TILE, 0))
 	var etex := ImageTexture.create_from_image(eatlas)
+	_w4_prof_mark("rebuild_tileset_edge")
 	var etileset := TileSet.new()
 	etileset.tile_size = Vector2i(TILE, TILE)
 	var esrc := TileSetAtlasSource.new()
@@ -1708,30 +2409,68 @@ func _build_tileset() -> void:
 		esrc.create_tile(Vector2i(i, 0), Vector2i(1, 1))
 	etileset.add_source(esrc)
 	_edge_tileset = etileset
-	# damage overlay tileset (single tile)
-	var datlas := Image.create(TILE, TILE, false, Image.FORMAT_RGBA8)
-	var dtex2: Texture2D = load("res://assets/damage.png")
-	var dim: Image = dtex2.get_image()
-	dim.convert(Image.FORMAT_RGBA8)
-	datlas.blit_rect(dim, Rect2i(0, 0, TILE, TILE), Vector2i(0, 0))
+	# Chunk 2: damage overlay tileset (two tiles — stage 1 cracked at
+	# (0,0), stage 2 heavily cracked at (1,0)).
+	var datlas := Image.create(2 * TILE, TILE, false, Image.FORMAT_RGBA8)
+	for di in range(2):
+		var dtex2: Texture2D = load("res://assets/damage.png" if di == 0 else "res://assets/damage2.png")
+		var dim: Image = dtex2.get_image()
+		if dim.get_format() != Image.FORMAT_RGBA8:
+			dim.convert(Image.FORMAT_RGBA8)
+		datlas.blit_rect(dim, Rect2i(0, 0, TILE, TILE), Vector2i(di * TILE, 0))
 	var dtileset := TileSet.new()
 	dtileset.tile_size = Vector2i(TILE, TILE)
 	var dsrc := TileSetAtlasSource.new()
 	dsrc.texture = ImageTexture.create_from_image(datlas)
 	dsrc.texture_region_size = Vector2i(TILE, TILE)
 	dsrc.create_tile(Vector2i(0, 0), Vector2i(1, 1))
+	dsrc.create_tile(Vector2i(1, 0), Vector2i(1, 1))
 	dtileset.add_source(dsrc)
 	_damage_tileset = dtileset
+	# Chunk 8 (b): overlay tileset — 3 cosmetic kinds, EXISTING art only,
+	# no new sprites. 0 moss = mossy-stone_v0, 1 crack = cracked-stone_v0,
+	# 2 path = dirt_v0 (a worn dirt patch over stone). The overlay layer
+	# draws these over the base tile; the fg tile underneath is untouched.
+	var oatlas := Image.create(3 * TILE, TILE, false, Image.FORMAT_RGBA8)
+	var opaths: Array = ["res://assets/tiles2/mossy-stone_v0.png",
+		"res://assets/tiles2/cracked-stone_v0.png",
+		"res://assets/tiles2/dirt_v0.png"]
+	for oi in range(3):
+		var otex: Texture2D = load(opaths[oi])
+		var oim: Image = otex.get_image()
+		if oim.get_format() != Image.FORMAT_RGBA8:
+			oim.convert(Image.FORMAT_RGBA8)
+		oatlas.blit_rect(oim, Rect2i(0, 0, TILE, TILE), Vector2i(oi * TILE, 0))
+	var otileset := TileSet.new()
+	otileset.tile_size = Vector2i(TILE, TILE)
+	var osrc := TileSetAtlasSource.new()
+	osrc.texture = ImageTexture.create_from_image(oatlas)
+	osrc.texture_region_size = Vector2i(TILE, TILE)
+	for oi in range(3):
+		osrc.create_tile(Vector2i(oi, 0), Vector2i(1, 1))
+	otileset.add_source(osrc)
+	_overlay_tileset = otileset
+	# Chunk 8 (c): the 16-tile Terrain Set resource. Built once by
+	# scripts/build_chunk8_terrain.gd (atlas PNG + .tres from the
+	# existing rock_*/dirt_* variants); loaded here for the runtime
+	# painter and the chunk-8 selftest cross-check.
+	if ResourceLoader.exists("res://deepfall_terrain.tres"):
+		_terrain_tileset = load("res://deepfall_terrain.tres")
+	else:
+		_terrain_tileset = null
+		print("DEEPFALL_CHUNK8_TERRAIN_MISSING deepfall_terrain.tres not found — run scripts/build_chunk8_terrain.gd")
 
 # Phase 9: true transition / corner tile selection. Returns the atlas
 # COLUMN of the special tile for this cell, or -1 for a plain fill variant.
-# Priority (first match wins): material transition (a solid orthogonal
-# neighbour of the other family — rock vs dirt), then outer corner (two
-# adjacent air orthogonals). Ore / wood / brick cells never take these
-# tiles — they keep their own fill. Pure function of (fg, cell), so a
-# mined neighbour re-derives the cell via _set_fill_cell() with no RNG.
+# Priority (first match wins, audit section 3.1): material transition
+# (a solid orthogonal neighbour of the other family — rock vs dirt),
+# then inner corner (Chunk 2: diagonal air + both orthogonals solid),
+# then outer corner (two adjacent air orthogonals). Ore / wood / brick
+# cells never take these tiles — they keep their own fill. Pure function
+# of (fg, cell), so a mined neighbour re-derives the cell via
+# _set_fill_cell() with no RNG.
 func _fill_special(c: Vector2i) -> int:
-	if c.x < 0 or c.x >= 80 or c.y < 0 or c.y >= 45:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
 		return -1
 	var t: int = fg[c.y][c.x]
 	var g := _mat_group(t)
@@ -1742,11 +2481,26 @@ func _fill_special(c: Vector2i) -> int:
 	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 	for i in range(4):
 		var nb: Vector2i = c + dirs[i]
-		if nb.x >= 0 and nb.x < 80 and nb.y >= 0 and nb.y < 45 and _is_solid_cell(nb):
+		if nb.x >= 0 and nb.x < DeepfallMapGen.W and nb.y >= 0 and nb.y < DeepfallMapGen.H and _is_solid_cell(nb):
 			var ng := _mat_group(fg[nb.y][nb.x])
 			if (g == 0 and ng == 1) or (g == 1 and ng == 0):
 				# TRANS_NAMES order: rock N/E/S/W (0-3), dirt N/E/S/W (4-7).
 				return base_col + (i if g == 0 else 4 + i)
+	# Chunk 2: inner (concave) corner — a diagonal air neighbour with
+	# both orthogonals on that corner solid. Audit section 3.1 order:
+	# transition (above) -> inner corner -> outer corner (below).
+	var inner_off := -1
+	if _is_air(c + Vector2i(1, -1)) and _is_solid_cell(c + Vector2i(0, -1)) and _is_solid_cell(c + Vector2i(1, 0)):
+		inner_off = 0  # NE
+	elif _is_air(c + Vector2i(-1, -1)) and _is_solid_cell(c + Vector2i(0, -1)) and _is_solid_cell(c + Vector2i(-1, 0)):
+		inner_off = 1  # NW
+	elif _is_air(c + Vector2i(1, 1)) and _is_solid_cell(c + Vector2i(0, 1)) and _is_solid_cell(c + Vector2i(1, 0)):
+		inner_off = 2  # SE
+	elif _is_air(c + Vector2i(-1, 1)) and _is_solid_cell(c + Vector2i(0, 1)) and _is_solid_cell(c + Vector2i(-1, 0)):
+		inner_off = 3  # SW
+	if inner_off >= 0:
+		# INNER_NAMES order: rock NE/NW/SE/SW (0-3), dirt (4-7).
+		return base_col + 16 + (inner_off if g == 0 else 4 + inner_off)
 	var top := _is_air(c + Vector2i(0, -1))
 	var bot := _is_air(c + Vector2i(0, 1))
 	var left := _is_air(c + Vector2i(-1, 0))
@@ -1765,13 +2519,131 @@ func _fill_special(c: Vector2i) -> int:
 		return base_col + 8 + (corner_off if g == 0 else 4 + corner_off)
 	return -1
 
+# Chunk 2: atlas coords for a slope cell. Material picks the family,
+# shape picks the direction (rise right/left) or the half/stair form,
+# and the deterministic block hash picks the art variant row (r/r2)
+# where the material has two. Half-blocks are symmetric: one column.
+func _slope_atlas_coords(c: Vector2i) -> Vector2i:
+	var s: Dictionary = slopes[c]
+	var shape: int = int(s.get("shape", 0))
+	var mat: String = String(s.get("mat", "stone"))
+	var base := 39  # first SLOPE_NAMES column
+	var idx := 0
+	if shape == SLOPE_HALF:
+		idx = {"stone": 10, "dirt": 11, "wood": 12}.get(mat, 10)
+	elif shape == SLOPE_STAIRS:
+		idx = {"stone": 13, "wood": 15}.get(mat, 13)
+	elif shape == SLOPE_STAIRS_LEFT:
+		idx = {"stone": 14, "wood": 16}.get(mat, 14)
+	else:
+		var mat_base: int = int({"stone": 0, "dirt": 2, "brick": 4, "grass": 6, "obsidian": 8}.get(mat, 0))
+		idx = mat_base + (0 if shape == SLOPE_RISE_RIGHT else 1)
+	var vcount: int = VARIANT_COUNTS.get(SLOPE_NAMES[idx], 1)
+	var v := 0
+	if vcount > 1:
+		v = (c.x / 4 + c.y / 4) % vcount
+	return Vector2i(base + idx, v)
+
+# Chunk 2 groundwork: region seed derivation for Fungal Hollows.
+# Region 0 (Mines) uses run_seed directly. Region 1 (Hollows) derives
+# run_seed + 100000 so the Hollows layout is stable per run but never
+# collides with the Mines layout. No caller uses region 1 yet — the full
+# region build is out of scope for this chunk (see
+# FUNGAL-HOLLOWS-GROUNDWORK.md).
+func _region_seed(region_id: int) -> int:
+	if region_id == REGIONS["fungal_hollows"]:
+		return run_seed + 100000
+	return run_seed
+
+# --- Chunk 8 (b): cosmetic overlay ---
+# Kinds: 0 moss, 1 crack, 2 path. Pure function of (fg, cell + 8
+# neighbours): deterministic block hash, no RNG, no gameplay effect.
+# Only stone-family solids (3/9/10/12) ever carry an overlay — ore cells
+# are exempt (same reason as the edge overlay: don't darken the pickup),
+# air/platform/slope cells never do. Priority: path > moss > crack.
+func _overlay_for_cell(c: Vector2i) -> int:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
+		return -1
+	if slopes.has(c):
+		return -1
+	var t: int = fg[c.y][c.x]
+	if _mat_group(t) != 0:
+		return -1
+	var above_air := _is_air(c + Vector2i(0, -1))
+	# Path: a worn floor-top run — air above this cell and above both
+	# horizontal neighbours, so the patch reads as a walked path.
+	if above_air and _is_air(c + Vector2i(-1, -1)) and _is_air(c + Vector2i(1, -1)) and (c.x * 7 + c.y * 13) % 5 == 0:
+		return 2
+	# Moss: exposed top face.
+	if above_air and (c.x * 31 + c.y * 17) % 7 == 0:
+		return 0
+	# Crack: exposed side face.
+	if (_is_air(c + Vector2i(1, 0)) or _is_air(c + Vector2i(-1, 0))) and (c.x * 13 + c.y * 29) % 11 == 0:
+		return 1
+	return -1
+
+func _update_overlay(c: Vector2i) -> void:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
+		return
+	var k := _overlay_for_cell(c)
+	var l := _overlay_layer_for(c)
+	if k < 0:
+		l.erase_cell(c)
+	else:
+		l.set_cell(c, 0, Vector2i(k, 0))
+
+func _render_overlays() -> void:
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
+			_update_overlay(Vector2i(x, y))
+
+# --- Chunk 8 (c): 16-tile terrain mask ---
+# 4-bit cardinal mask, N=1 E=2 S=4 W=8, bit set where the neighbour is
+# the SAME material family (rock vs dirt) and solid. Out of bounds counts
+# as no neighbour (Godot terrain peering: no tile = empty terrain).
+# This is the same mask the deepfall_terrain.tres Terrain Set encodes in
+# its peering bits, so the fg fill variant and the terrain painter agree
+# by construction. Pure function of (fg, cell).
+func _terrain_mask(c: Vector2i) -> int:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
+		return -1
+	var t: int = fg[c.y][c.x]
+	var g := _mat_group(t)
+	if g != 0 and g != 1:
+		return -1
+	var m := 0
+	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	var bits := [1, 2, 4, 8]
+	for i in range(4):
+		var nb: Vector2i = c + dirs[i]
+		if nb.x >= 0 and nb.x < DeepfallMapGen.W and nb.y >= 0 and nb.y < DeepfallMapGen.H:
+			var nt: int = fg[nb.y][nb.x]
+			if nt != 0 and nt != 7 and _mat_group(nt) == g:
+				m += bits[i]
+	return m
+
+# Chunk 8 (c): runtime terrain painter. Paints `cells` with `terrain_id`
+# (0 rock, 1 dirt) on a layer that uses the Terrain Set.
+# Godot 4.8 note: TileMapLayer has NO update_terrain_connections() (that
+# was the pre-split TileMap API) — set_cells_terrain_connect computes the
+# connections itself, immediately, so one call per terrain is the whole
+# painter. Do NOT re-add an update call: it is a script error here.
+func _paint_terrain_cells(layer: TileMapLayer, cells: Array, terrain_id: int) -> void:
+	if layer == null or _terrain_tileset == null:
+		return
+	layer.set_cells_terrain_connect(cells, 0, terrain_id, false)
+
 func _set_fill_cell(c: Vector2i) -> void:
 	# (Re)derives one cell's fill tile in its chunk layer: special
 	# transition/corner art when the neighbour mask calls for it, else
 	# the Phase 4 neighbour-mask variant. Air erases the cell.
-	if c.x < 0 or c.x >= 80 or c.y < 0 or c.y >= 45:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
 		return
 	var layer := _fg_layer_for(c)
+	# Chunk 2: a slope cell draws its slope art even though fg is air.
+	if slopes.has(c):
+		layer.set_cell(c, 0, _slope_atlas_coords(c))
+		return
 	var t: int = fg[c.y][c.x]
 	if t == 0:
 		layer.erase_cell(c)
@@ -1781,26 +2653,243 @@ func _set_fill_cell(c: Vector2i) -> void:
 		layer.set_cell(c, 0, Vector2i(sp, 0))
 		return
 	var idx: int = FG_TO_ATLAS.get(t, 2)
-	layer.set_cell(c, 0, Vector2i(idx, _variant(c.x, c.y, TILE_NAMES[idx])))
+	# Chunk 8 (c): rock/dirt plain fills take their 16-tile terrain mask
+	# as the variant row (N=1 E=2 S=4 W=8, same-family neighbours)
+	# instead of the Phase 4 hash variant — the mask is what the Terrain
+	# Set encodes, so fg and the terrain painter agree. Special
+	# transition/corner art above still wins; ore/wood/brick keep the
+	# hash variant.
+	var var_row: int = _variant(c.x, c.y, TILE_NAMES[idx])
+	var tm := _terrain_mask(c)
+	if tm >= 0:
+		var_row = tm
+	layer.set_cell(c, 0, Vector2i(idx, var_row))
 
-func _render_layers() -> void:
-	for y in range(45):
-		for x in range(80):
+# W4 test-only: dump every non-empty fg/wall/edge cell so a render
+# optimisation can be diffed against the pre-change output, seed by
+# seed. Lines are sorted externally (get_used_cells order is unsorted).
+func _dump_layers() -> void:
+	var types: Array = [["fg", _fg_layers], ["wall", _wall_layers], ["edge", _edge_layers]]
+	for t in types:
+		var lname: String = t[0]
+		var layers: Array = t[1]
+		for ci in range(layers.size()):
+			var layer: TileMapLayer = layers[ci]
+			for cell in layer.get_used_cells():
+				var at: Vector2i = layer.get_cell_atlas_coords(cell)
+				print("DUMP %s %d %d %d %d %d" % [lname, ci, cell.x, cell.y, at.x, at.y])
+	print("DUMP_DONE")
+
+# W4: merged bulk render pass. One 200x90 sweep replaces _render_layers +
+# _render_edges: the neighbour air/solid mask and material groups are
+# computed once per cell and shared by the fill, wall and edge decisions
+# (the old code re-derived them in _fill_special, _variant and
+# _edge_for_cell, called _fill_special twice per solid cell, and walked
+# the grid twice with a Vector2i alloc + _stream_chunk_of call per cell).
+# Output is identical to the two old passes — verified by --dump-layers
+# diff on 3 seeds. Chunk layers are indexed arithmetically (in-bounds
+# cells never need the clamp in _stream_chunk_of). Ore cells are
+# collected in the same scan order _render_props used, so its own 18k
+# sweep is gone. _set_fill_cell / _update_edge (single-cell, used when
+# mining re-derives neighbours) are untouched.
+var _bulk_ore_cells: Array = []
+const _MAT_GROUP_LUT := [3, 1, 1, 0, 2, 2, 3, 3, 3, 0, 0, 1, 0, 2]
+# tile id -> _mat_group: 0 stone fam {3,9,10,12}, 1 dirt fam {1,2,11},
+# 2 ore {4,5,13}, 3 other. Id 0 (air) is never looked up.
+
+func _render_layers_and_edges() -> void:
+	_bulk_ore_cells.clear()
+	var W := DeepfallMapGen.W
+	var H := DeepfallMapGen.H
+	for y in range(H):
+		var ci_base := (y / STREAM) * STREAM_COLS
+		for x in range(W):
+			var t: int = fg[y][x]
+			var ci := ci_base + x / STREAM
 			var c := Vector2i(x, y)
-			_set_fill_cell(c)
-			var w: int = wall[y][x]
-			if w != 0:
-				var idx2: int = WALL_TO_ATLAS[w]
-				_wall_layer_for(c).set_cell(c, 0, Vector2i(idx2, _variant(x, y)))
+			# Neighbour fg (borders read as stone: _is_solid_cell is true
+			# out of bounds, _is_air false — the _in flags gate the
+			# transition checks exactly like the old bounds checks).
+			var n_in := y > 0
+			var e_in := x + 1 < W
+			var s_in := y + 1 < H
+			var w_in := x > 0
+			var n_fg: int = fg[y - 1][x] if n_in else 3
+			var e_fg: int = fg[y][x + 1] if e_in else 3
+			var s_fg: int = fg[y + 1][x] if s_in else 3
+			var w_fg: int = fg[y][x - 1] if w_in else 3
+			# Chunk 2: diagonal neighbours (out of bounds read as stone,
+			# like the orthogonal defaults above — never air).
+			var ne_fg: int = fg[y - 1][x + 1] if n_in and e_in else 3
+			var nw_fg: int = fg[y - 1][x - 1] if n_in and w_in else 3
+			var se_fg: int = fg[y + 1][x + 1] if s_in and e_in else 3
+			var sw_fg: int = fg[y + 1][x - 1] if s_in and w_in else 3
+			var n_air := n_in and n_fg == 0
+			var e_air := e_in and e_fg == 0
+			var s_air := s_in and s_fg == 0
+			var w_air := w_in and w_fg == 0
+			var ne_air := n_in and e_in and ne_fg == 0
+			var nw_air := n_in and w_in and nw_fg == 0
+			var se_air := s_in and e_in and se_fg == 0
+			var sw_air := s_in and w_in and sw_fg == 0
+			# _is_solid_cell: in-bounds fg != 0 and != 7 (platform is
+			# not solid); out of bounds counts as solid.
+			var n_solid := (not n_in) or (n_fg != 0 and n_fg != 7)
+			var e_solid := (not e_in) or (e_fg != 0 and e_fg != 7)
+			var s_solid := (not s_in) or (s_fg != 0 and s_fg != 7)
+			var w_solid := (not w_in) or (w_fg != 0 and w_fg != 7)
+			var mask := (1 if n_air else 0) + (2 if e_air else 0) + (4 if s_air else 0) + (8 if w_air else 0)
+			var cell_solid := t != 0 and t != 7
+			# --- fill (was _set_fill_cell) ---
+			var sp := -1
+			if slopes.has(c):
+				# Chunk 2: slope art even though fg is air.
+				_fg_layers[ci].set_cell(c, 0, _slope_atlas_coords(c))
+			elif t == 0:
+				_fg_layers[ci].erase_cell(c)
+			else:
+				var g: int = _MAT_GROUP_LUT[t]
+				if g == 0 or g == 1:
+					# material transition first (dirs N,E,S,W, like
+					# _fill_special); each direction only if in bounds,
+					# solid, and the other family (rock vs dirt).
+					var ngn: int = -1
+					if n_in and n_solid:
+						ngn = _MAT_GROUP_LUT[n_fg]
+						if (g == 0 and ngn == 1) or (g == 1 and ngn == 0):
+							sp = 15 + (0 if g == 0 else 4)
+					if sp < 0 and e_in and e_solid:
+						var nge: int = _MAT_GROUP_LUT[e_fg]
+						if (g == 0 and nge == 1) or (g == 1 and nge == 0):
+							sp = 15 + (1 if g == 0 else 5)
+					if sp < 0 and s_in and s_solid:
+						var ngs: int = _MAT_GROUP_LUT[s_fg]
+						if (g == 0 and ngs == 1) or (g == 1 and ngs == 0):
+							sp = 15 + (2 if g == 0 else 6)
+					if sp < 0 and w_in and w_solid:
+						var ngw: int = _MAT_GROUP_LUT[w_fg]
+						if (g == 0 and ngw == 1) or (g == 1 and ngw == 0):
+							sp = 15 + (3 if g == 0 else 7)
+					if sp < 0:
+						# Chunk 2: inner corner (audit 3.1 order: after
+						# transition, before outer corner). Diagonal air
+						# + both orthogonals solid on that corner.
+						var inner_off := -1
+						if ne_air and n_solid and e_solid:
+							inner_off = 0
+						elif nw_air and n_solid and w_solid:
+							inner_off = 1
+						elif se_air and s_solid and e_solid:
+							inner_off = 2
+						elif sw_air and s_solid and w_solid:
+							inner_off = 3
+						if inner_off >= 0:
+							sp = 15 + 16 + (inner_off if g == 0 else 4 + inner_off)
+					if sp < 0:
+						var corner_off := -1
+						if n_air and w_air:
+							corner_off = 0
+						elif n_air and e_air:
+							corner_off = 1
+						elif s_air and w_air:
+							corner_off = 2
+						elif s_air and e_air:
+							corner_off = 3
+						if corner_off >= 0:
+							sp = 15 + 8 + (corner_off if g == 0 else 4 + corner_off)
+				if sp >= 0:
+					_fg_layers[ci].set_cell(c, 0, Vector2i(sp, 0))
+				else:
+					var idx: int = FG_TO_ATLAS.get(t, 2)
+					var nvar: int = VARIANT_COUNTS.get(TILE_NAMES[idx], 4)
+					var var_row: int = (mask * 3 + (x / 4 + y / 4)) % nvar
+					# Chunk 8 (c): rock/dirt plain fills take the 16-tile
+					# terrain mask as the variant row — the same rule as
+					# _set_fill_cell, so the bulk pass and the single-cell
+					# re-derive agree cell for cell. Same-family solid
+					# neighbours only; out of bounds = no neighbour.
+					var g2: int = _MAT_GROUP_LUT[t]
+					if g2 == 0 or g2 == 1:
+						var tm2 := 0
+						if n_in and n_fg != 0 and n_fg != 7 and _MAT_GROUP_LUT[n_fg] == g2:
+							tm2 += 1
+						if e_in and e_fg != 0 and e_fg != 7 and _MAT_GROUP_LUT[e_fg] == g2:
+							tm2 += 2
+						if s_in and s_fg != 0 and s_fg != 7 and _MAT_GROUP_LUT[s_fg] == g2:
+							tm2 += 4
+						if w_in and w_fg != 0 and w_fg != 7 and _MAT_GROUP_LUT[w_fg] == g2:
+							tm2 += 8
+						var_row = tm2
+					_fg_layers[ci].set_cell(c, 0, Vector2i(idx, var_row))
+				if t == 4 or t == 5:
+					_bulk_ore_cells.append(c)
+			# --- wall (was _render_layers tail) ---
+			var wv: int = wall[y][x]
+			if wv != 0:
+				var idx2: int = WALL_TO_ATLAS[wv]
+				_wall_layers[ci].set_cell(c, 0, Vector2i(idx2, (mask * 3 + (x / 4 + y / 4)) % 4))
+			# --- edge (was _update_edge / _edge_for_cell) ---
+			var e := -1
+			if slopes.has(c):
+				pass  # Chunk 2: slope art is its own silhouette; no overlay.
+			elif cell_solid:
+				if sp < 0:
+					var own: int = _MAT_GROUP_LUT[t]
+					var done := false
+					if own != 2:
+						# transition (dirs N,S,W,E, like _edge_for_cell)
+						if n_in and n_solid and _MAT_GROUP_LUT[n_fg] != own:
+							e = 0
+							done = true
+						elif s_in and s_solid and _MAT_GROUP_LUT[s_fg] != own:
+							e = 1
+							done = true
+						elif w_in and w_solid and _MAT_GROUP_LUT[w_fg] != own:
+							e = 2
+							done = true
+						elif e_in and e_solid and _MAT_GROUP_LUT[e_fg] != own:
+							e = 3
+							done = true
+					if not done:
+						if n_air and w_air:
+							e = 4
+						elif n_air and e_air:
+							e = 5
+						elif s_air and w_air:
+							e = 6
+						elif s_air and e_air:
+							e = 7
+						elif n_air:
+							e = 0
+						elif s_air:
+							e = 1
+						elif w_air:
+							e = 2
+						elif e_air:
+							e = 3
+			else:
+				# air cell (a platform counts as air here, like _edge_for_cell)
+				if n_solid and w_solid:
+					e = 4
+				elif n_solid and e_solid:
+					e = 5
+				elif s_solid and w_solid:
+					e = 6
+				elif s_solid and e_solid:
+					e = 7
+			if e < 0:
+				_edge_layers[ci].erase_cell(c)
+			else:
+				_edge_layers[ci].set_cell(c, 0, Vector2i(e, 0))
 
 func _is_solid_cell(c: Vector2i) -> bool:
-	if c.x < 0 or c.x >= 80 or c.y < 0 or c.y >= 45:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
 		return true
 	var t: int = fg[c.y][c.x]
 	return t != 0 and t != 7
 
 func _is_air(c: Vector2i) -> bool:
-	if c.x < 0 or c.x >= 80 or c.y < 0 or c.y >= 45:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
 		return false
 	return fg[c.y][c.x] == 0
 
@@ -1808,6 +2897,10 @@ func _edge_for_cell(c: Vector2i) -> int:
 	# returns edge atlas index, or -1 for no overlay. Priority:
 	# material transition, outer corner, edge, then inner corner (air
 	# cells boxed in by solid on two perpendicular sides).
+	# Chunk 2: slope cells are air cells whose art is its own
+	# silhouette — no edge overlay on them.
+	if slopes.has(c):
+		return -1
 	if _is_solid_cell(c):
 		# Phase 9: cells carrying real transition/corner tile art get NO
 		# overlay — the art already is the boundary treatment, and the
@@ -1824,7 +2917,7 @@ func _edge_for_cell(c: Vector2i) -> int:
 		# treatment, stated as such in the README).
 		for d in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
 			var nb: Vector2i = c + d
-			if own != 2 and nb.x >= 0 and nb.x < 80 and nb.y >= 0 and nb.y < 45 and _is_solid_cell(nb) and _mat_group(fg[nb.y][nb.x]) != own:
+			if own != 2 and nb.x >= 0 and nb.x < DeepfallMapGen.W and nb.y >= 0 and nb.y < DeepfallMapGen.H and _is_solid_cell(nb) and _mat_group(fg[nb.y][nb.x]) != own:
 				if d == Vector2i(0, -1): return 0
 				if d == Vector2i(0, 1): return 1
 				if d == Vector2i(-1, 0): return 2
@@ -1843,7 +2936,7 @@ func _edge_for_cell(c: Vector2i) -> int:
 		if right: return 3
 		return -1
 	# Air cell: inner corner where solid boxes it on two sides.
-	if c.x < 0 or c.x >= 80 or c.y < 0 or c.y >= 45:
+	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
 		return -1
 	var stop := _is_solid_cell(c + Vector2i(0, -1))
 	var sbot := _is_solid_cell(c + Vector2i(0, 1))
@@ -1863,12 +2956,10 @@ func _update_edge(c: Vector2i) -> void:
 	else:
 		l.set_cell(c, 0, Vector2i(e, 0))
 
-func _render_edges() -> void:
-	for y in range(45):
-		for x in range(80):
-			_update_edge(Vector2i(x, y))
-
 func _render_props() -> void:
+	# W4: timber textures loaded once per rebuild, not once per post.
+	var post_tex: Texture2D = load("res://assets/atlas3/timber_post.png")
+	var trestle_tex: Texture2D = load("res://assets/atlas3/timber_trestle.png")
 	var spawn: Vector2i = data["spawn"]
 	var exit_cell: Vector2i = data["exit"]
 	# timber supports: one frame per room, at the room's side walls, visual only
@@ -1883,7 +2974,7 @@ func _render_props() -> void:
 			if fg[floor_y][px] == 0:
 				continue  # post must stand on a solid floor cell
 			var post := Sprite2D.new()
-			post.texture = load("res://assets/atlas3/timber_post.png")
+			post.texture = post_tex
 			post.scale = Vector2(128.0 / 766.0, 128.0 / 766.0)
 			post.position = Vector2(px * TILE + 32, (floor_y - 2) * TILE + 64)
 			post.z_index = 1
@@ -1908,7 +2999,7 @@ func _render_props() -> void:
 			var tc := Vector2i(tx, floor_y - 1)
 			if tc != spawn and tc != exit_cell and fg[floor_y - 1][tx] == 0:
 				var tres := Sprite2D.new()
-				tres.texture = load("res://assets/atlas3/timber_trestle.png")
+				tres.texture = trestle_tex
 				tres.scale = Vector2(128.0 / 559.0, 128.0 / 559.0)
 				tres.position = Vector2((tx + 0.5) * TILE, floor_y * TILE - 38)
 				tres.z_index = 1
@@ -1966,46 +3057,138 @@ func _render_props() -> void:
 			moss.color = Color(0.35, 0.60, 0.25, 1.0)
 			moss.z_index = 1
 			_add_prop(moss, mc)
-	# crystal clusters: cyan diamond + light in an air cell beside an ore cell
-	var ore_cells: Array = []
-	for y in range(45):
-		for x in range(80):
-			if fg[y][x] == 4 or fg[y][x] == 5:
-				ore_cells.append(Vector2i(x, y))
-	for pick in [0, 7, 14]:
-		if pick >= ore_cells.size():
-			continue
-		var oc: Vector2i = ore_cells[pick]
-		var placed := false
+	# Chunk 4: crystal clusters by the audit §3.3-§3.4 cluster rule.
+	# This REPLACES the old index-based ore-list picks (0, 7, 14).
+	# Ore cells are grouped into veins by 4-connectivity flood fill
+	# (veins are the connected random walks map_gen writes, §3.4);
+	# at most one cluster per vein, in an air cell beside an ore
+	# cell, never on an ore cell, never on a route/spawn/exit cell.
+	# Cap ≤ 1 per 2 rooms (audit §3.3); a vein with no valid cell
+	# or a full budget is skipped, never relocated, so the result
+	# is a pure function of the seed + fg grid (deterministic per
+	# rebuild, chunk-safe by the same argument as §3.5).
+	var veins := _group_ore_veins(_bulk_ore_cells)
+	var crystal_budget: int = data["rooms"].size() / 2
+	for vein in veins:
+		if _crystal_cells.size() >= crystal_budget:
+			break
+		_place_crystal_for_vein(vein, spawn, exit_cell)
+
+# Chunk 4: group ore cells into veins (4-connectivity flood fill).
+# _bulk_ore_cells arrives in y-then-x scan order, so the vein list
+# and the cell order inside each vein are deterministic per seed.
+func _group_ore_veins(ore_cells: Array) -> Array:
+	var remaining := {}
+	for c in ore_cells:
+		remaining[c] = true
+	var veins: Array = []
+	while not remaining.is_empty():
+		var seed_cell: Vector2i = remaining.keys()[0]
+		var vein: Array = []
+		var stack: Array = [seed_cell]
+		remaining.erase(seed_cell)
+		while not stack.is_empty():
+			var c: Vector2i = stack.pop_back()
+			vein.append(c)
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = c + d
+				if remaining.has(n):
+					remaining.erase(n)
+					stack.append(n)
+		veins.append(vein)
+	return veins
+
+# Chunk 4: is this cell on a travelled route? The recorded route data
+# is map_gen's vertical corridor legs (3-wide shafts [bx..bx+2] over
+# rows y0..y1, data["legs"]) — horizontal legs are NOT recorded by
+# map_gen, so they cannot be excluded from data; the audit rule is
+# enforced against the recorded legs plus the spawn/exit/gate
+# exclusion below. Ore veins sit above room ceilings in solid rock,
+# so the air cell beside an ore cell is overwhelmingly inside a room,
+# not in a corridor; the selftest asserts the recorded-leg exclusion.
+func _is_route_cell(c: Vector2i) -> bool:
+	for leg in data.get("legs", []):
+		var lx: int = leg[0]
+		var y0: int = leg[1]
+		var y1: int = leg[2]
+		if c.x >= lx and c.x <= lx + 2 and c.y >= y0 and c.y <= y1:
+			return true
+	return false
+
+# Chunk 4: one crystal cluster for one vein, first valid neighbour
+# wins (E, W, N, S — the old pick order, kept). A neighbour is valid
+# when it is air, not an ore cell, not a route cell, not spawn/exit,
+# not the chamber gate, not already a crystal cell, and at least 3
+# cells from spawn/exit (the same clearance _pick_enemy_cell uses).
+func _place_crystal_for_vein(vein: Array, spawn: Vector2i, exit_cell: Vector2i) -> void:
+	for oc in vein:
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
-			var ac: Vector2i = oc + d
-			if _is_air(ac) and ac != spawn and ac != exit_cell:
-				var dia := Polygon2D.new()
-				dia.polygon = PackedVector2Array([Vector2(0, -14), Vector2(10, 0),
-					Vector2(0, 14), Vector2(-10, 0)])
-				dia.color = Color(0.5, 0.89, 0.94, 1.0)
-				dia.position = Vector2((ac.x + 0.5) * TILE, (ac.y + 0.5) * TILE)
-				dia.z_index = 1
-				_add_prop(dia, ac)
-				var cl := PointLight2D.new()
-				cl.color = Color(0.5, 0.89, 0.94)
-				cl.energy = 0.6
-				cl.texture = _light_gradient_texture()
-				cl.texture_scale = 192.0 / 448.0
-				cl.shadow_enabled = false
-				cl.position = dia.position
-				_add_prop(cl, ac)
-				_crystal_cells.append(ac)
-				placed = true
-				break
-		if not placed:
-			continue
+			var ac: Vector2i = (oc as Vector2i) + d
+			if not _is_air(ac):
+				continue
+			if ac == spawn or ac == exit_cell:
+				continue
+			if ac == _chamber_gate:
+				continue
+			if _crystal_cells.has(ac):
+				continue
+			if _is_route_cell(ac):
+				continue
+			if ac.distance_to(spawn) < 3.0 or ac.distance_to(exit_cell) < 3.0:
+				continue
+			_make_crystal_at(ac)
+			return
+
+# Chunk 4: the crystal itself — cyan diamond + 3-tile cyan light
+# (VISUAL-SPEC §5.3: colour #7FE3F0, energy 0.6, radius 3 tiles =
+# 192 px, texture scale 192/448 — unchanged from the old picks),
+# plus slow-drifting cyan spore motes (CPUParticles2D, chunk-streamed
+# like the chamber embers) and one spore-puff burst so the cluster
+# reads as alive the moment the world builds.
+func _make_crystal_at(ac: Vector2i) -> void:
+	var dia := Polygon2D.new()
+	dia.polygon = PackedVector2Array([Vector2(0, -14), Vector2(10, 0),
+		Vector2(0, 14), Vector2(-10, 0)])
+	dia.color = Color(0.5, 0.89, 0.94, 1.0)
+	dia.position = Vector2((ac.x + 0.5) * TILE, (ac.y + 0.5) * TILE)
+	dia.z_index = 1
+	_add_prop(dia, ac)
+	var cl := PointLight2D.new()
+	cl.color = Color(0.5, 0.89, 0.94)
+	cl.energy = 0.6
+	cl.texture = _light_gradient_texture()
+	cl.texture_scale = 192.0 / 448.0
+	cl.shadow_enabled = false
+	cl.position = dia.position
+	_add_prop(cl, ac)
+	var motes := CPUParticles2D.new()
+	motes.amount = 4
+	motes.lifetime = 2.5
+	motes.emitting = true
+	motes.direction = Vector2(0, -1)
+	motes.spread = 45.0
+	motes.gravity = Vector2(0, -12)
+	motes.initial_velocity_min = 6.0
+	motes.initial_velocity_max = 16.0
+	motes.scale_amount_min = 2.0
+	motes.scale_amount_max = 3.5
+	motes.color = Color(0.5, 0.89, 0.94, 0.8)
+	motes.position = dia.position
+	_add_prop(motes, ac)
+	_crystal_cells.append(ac)
+	_spawn_staged_burst(dia.position, "spore-puff", 0.5, 0.4)
 
 func _process(delta: float) -> void:
+	# Phase 14: _ready is staged now (loading screen + awaits), so
+	# _process runs for a few frames before the world exists. Nothing
+	# here is valid until the rebuild has populated data/fg.
+	if data.is_empty():
+		return
 	_time += delta
 	_update_orbs(delta)
 	_update_fx(delta)
 	_update_parallax()
+	_update_framing_clearance()
 	mine_cooldown = max(0.0, mine_cooldown - delta)
 	if _respawn_timer > 0.0:
 		_respawn_timer -= delta
@@ -2051,6 +3234,10 @@ func _process(delta: float) -> void:
 	if pc == data["exit"] and not extracted:
 		extracted = true
 		print("DEEPFALL_EXTRACT_REACHED")
+		# Chunk 3: first extraction unlocks the hooded skeleton hero.
+		if not skeleton_unlocked:
+			skeleton_unlocked = true
+			print("DEEPFALL_SKELETON_UNLOCKED reason=extract")
 		if _cards_enabled:
 			_card_pending = 0.4
 			_card_reason = "extract"
@@ -2067,6 +3254,33 @@ func _process(delta: float) -> void:
 	if not _selecting and not _card_open:
 		_run_time += delta
 		_max_depth = maxi(_max_depth, depth)
+	# Chunk 1: slain foes respawn 60 s after death at their
+	# deterministic cell, so a camped room repopulates instead of
+	# sitting at foes=0. No pop-in: a foe only returns if its cell
+	# is > 400 px from the player, otherwise its timer is pushed
+	# out 10 s. Chunk-gating still applies via _refresh.
+	if not _respawn_at.is_empty() and _world_ready:
+		var due: Array = []
+		for sid in _respawn_at:
+			if _run_time >= float(_respawn_at[sid]):
+				due.append(int(sid))
+		if not due.is_empty():
+			var changed := false
+			for sid in due:
+				var cell := _spawn_cell_for_id(sid)
+				if cell == Vector2i(-1, -1):
+					_respawn_at.erase(sid)
+					continue
+				var cpos := Vector2((cell.x + 0.5) * TILE, (cell.y + 0.5) * TILE)
+				if cpos.distance_to(player.position) <= 400.0:
+					_respawn_at[sid] = _run_time + 10.0
+					continue
+				_slain_ids.erase(sid)
+				_respawn_at.erase(sid)
+				changed = true
+				print("DEEPFALL_ENEMY_RESPAWN id=%d slug=%s cell=%s" % [sid, _spawn_slug_for_id(sid), str(cell)])
+			if changed:
+				_refresh_enemies_for_chunks()
 	if fx != null:
 		fx.update_ambience(clampf(float(depth) / 44.0, 0.0, 1.0))
 	if _card_pending > 0.0:
@@ -2105,12 +3319,14 @@ func _input(event: InputEvent) -> void:
 				_pick_class("red")
 			elif event.keycode == KEY_3:
 				_pick_class("mage")
+			elif event.keycode == KEY_4:
+				_pick_class("skeleton")
 			elif event.keycode == KEY_LEFT:
-				_highlight_class((_class_index + 2) % 3)
+				_highlight_class((_class_index + _class_cards.size() - 1) % _class_cards.size())
 			elif event.keycode == KEY_RIGHT:
-				_highlight_class((_class_index + 1) % 3)
+				_highlight_class((_class_index + 1) % _class_cards.size())
 			elif event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
-				_pick_class(["tech", "red", "mage"][_class_index])
+				_pick_class(String(_class_cards[_class_index]["id"]))
 			return
 		if event.keycode == KEY_F5:
 			save_game("manual")
@@ -2154,7 +3370,7 @@ func _input(event: InputEvent) -> void:
 			aim_action((get_global_mouse_position() - player.position).normalized(), true)
 
 func _mine_at(cell: Vector2i, via_stick := false) -> void:
-	if cell.x < 0 or cell.x >= 80 or cell.y < 0 or cell.y >= 45:
+	if cell.x < 0 or cell.x >= DeepfallMapGen.W or cell.y < 0 or cell.y >= DeepfallMapGen.H:
 		return
 	var t: int = fg[cell.y][cell.x]
 	# Phase 10: mining and attacking are separated by the equipped
@@ -2174,8 +3390,11 @@ func _mine_at(cell: Vector2i, via_stick := false) -> void:
 		else:
 			log_event("Need pickaxe to mine")
 		return
-	# Pickaxe: unchanged 2-hit + crack behaviour, but the mining swing
-	# plays the melee animation now (not the shoot animation).
+	# Pickaxe: Chunk 2 makes this 3-hit (VISUAL-SPEC 3.1: intact ->
+	# cracked -> heavily cracked -> break). Hit 1 = stage 1 (damage.png),
+	# hit 2 = stage 2 (damage2.png), hit 3 breaks. Mining is slower
+	# than the old 2-hit flow — flagged as an open balance call for Skit.
+	# The mining swing plays the melee animation (not the shoot one).
 	player.call("trigger_melee")
 	_face_cell(cell)
 	var cpos := Vector2((cell.x + 0.5) * TILE, (cell.y + 0.5) * TILE)
@@ -2183,14 +3402,25 @@ func _mine_at(cell: Vector2i, via_stick := false) -> void:
 		fx.burst(cpos, _tile_color(t), 7 if mine_damage.has(cell) else 5, 280.0)
 		fx.shake(2.5)
 		fx.sfx("mine_hit", 0.12)
-	# damaged state first: crack overlay, block survives one hit.
+	# Chunk 4: mining dust — the staged smoke-puff frames, tinted to
+	# rock dust, on every pickaxe hit (small) and on the break (large).
+	_spawn_staged_burst(cpos, "smoke-puff", 0.45, 0.4, Color(0.75, 0.68, 0.55, 0.9))
+	# damaged states first: crack overlays, block survives two hits.
 	# Phase 6: the crack is an edit delta, saved with the run.
 	if not mine_damage.has(cell):
 		mine_damage[cell] = 1
 		_damage_layer_for(cell).set_cell(cell, 0, Vector2i(0, 0))
 		save_game("mine")
 		return
+	if mine_damage[cell] == 1:
+		mine_damage[cell] = 2
+		_damage_layer_for(cell).set_cell(cell, 0, Vector2i(1, 0))
+		save_game("mine")
+		return
 	mine_damage.erase(cell)
+	# Chunk 2: a mined slope cell loses its slope entry too, so no
+	# ghost slope art is re-derived over the fresh air.
+	slopes.erase(cell)
 	_damage_layer_for(cell).erase_cell(cell)
 	fg[cell.y][cell.x] = 0
 	_mined_cells[cell] = true
@@ -2204,6 +3434,8 @@ func _mine_at(cell: Vector2i, via_stick := false) -> void:
 		fx.shake(4.0)
 		fx.sfx("mine_break", 0.1)
 		fx.rumble(20)
+	# Chunk 4: break dust — larger smoke-puff than the per-hit puff.
+	_spawn_staged_burst(cpos, "smoke-puff", 0.7, 0.5, Color(0.75, 0.68, 0.55, 0.9))
 	if t == 4 or t == 5:
 		ore_collected += 1
 		last_ore_name = "Gold ore" if t == 4 else "Amber ore"
@@ -2215,6 +3447,10 @@ func _mine_at(cell: Vector2i, via_stick := false) -> void:
 			Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]:
 		_set_fill_cell(cell + d)
 		_update_edge(cell + d)
+		# Chunk 8 (b): the overlay recomputes from neighbours on every
+		# mine too — a neighbour can gain/lose moss/crack/path when
+		# this cell opens, and the mined cell itself loses its overlay.
+		_update_overlay(cell + d)
 	for key in torches.keys():
 		var sup: Vector2i = torches[key].get_meta("support")
 		if sup == cell:
@@ -2243,12 +3479,17 @@ func _light_gradient_texture() -> Texture2D:
 		for x in range(size):
 			var d := Vector2(x, y).distance_to(Vector2(cx, cx)) / cx
 			var a: float = clamp(1.0 - d, 0.0, 1.0)
-			# Phase 9 diagnosis (see README): the old squared falloff
-			# (a*a) made the outer ring too dim to see against the
-			# ambient tint, so the 7-tile texture read as a ~4-tile pool.
-			# pow 1.25 keeps a soft edge but roughly doubles the brightness
-			# at 4 tiles (0.18 -> 0.35) — measured in the Phase 9 notes.
-			a = pow(a, 1.25)
+			# Chunk 4 tune (was pow 1.25): the Phase 9 diagnosis stands
+			# — the old squared falloff made the 7-tile texture read
+			# as a ~4-tile pool — but pow 1.25 still left the pool
+			# reading ~4.6 tiles (alpha >= 0.25 out to tile 4 only:
+			# 1.00/0.82/0.66/0.50/0.35/0.21/0.09/0.00 at 0..7 tiles).
+			# Linear falloff: no exponent (the pow 1.25 is removed, not
+			# replaced — pow(a, 1.0) would be dead code). The texture
+			# still falls to 0 at 7 tiles; only the mid-pool is lifted.
+			# Same texture, same 7-tile radius rule, same energy.
+			# Measured by the Phase 4 selftest's torch_pool line,
+			# before/after on seed 20261101.
 			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
 	_light_tex = ImageTexture.create_from_image(img)
 	return _light_tex
@@ -2256,7 +3497,7 @@ func _light_gradient_texture() -> Texture2D:
 func _place_torch_at(cell: Vector2i, support: Vector2i) -> bool:
 	if torches.has(cell):
 		return false
-	if cell.x < 0 or cell.x >= 80 or cell.y < 0 or cell.y >= 45:
+	if cell.x < 0 or cell.x >= DeepfallMapGen.W or cell.y < 0 or cell.y >= DeepfallMapGen.H:
 		return false
 	if fg[cell.y][cell.x] != 0:
 		return false
@@ -2288,6 +3529,25 @@ func _place_torch_at(cell: Vector2i, support: Vector2i) -> bool:
 	stick.scale = Vector2(0.08, 0.08)
 	stick.centered = true
 	torch.add_child(stick)
+	# Chunk 4: continuous torch embers — the same 6-particle
+	# CPUParticles2D the two static chamber lights use (Phase 10
+	# perf: 6 per light), so a placed torch reads as lit, not just
+	# as a light disc. A child of the torch node, so it is freed
+	# with the torch and restored with it from a save.
+	var embers := CPUParticles2D.new()
+	embers.amount = 6
+	embers.lifetime = 1.2
+	embers.emitting = true
+	embers.direction = Vector2(0, -1)
+	embers.spread = 20.0
+	embers.gravity = Vector2(0, -60)
+	embers.initial_velocity_min = 20.0
+	embers.initial_velocity_max = 40.0
+	embers.scale_amount_min = 2.0
+	embers.scale_amount_max = 4.0
+	embers.color = Color(1.0, 0.6, 0.2, 1.0)
+	embers.position = Vector2(0, -16)
+	torch.add_child(embers)
 	add_child(torch)
 	torches[cell] = torch
 	return true
@@ -2315,6 +3575,9 @@ func _try_place_torch_here() -> Vector2i:
 func _place_torch() -> void:
 	var placed := _try_place_torch_here()
 	if placed.x >= 0:
+		# Chunk 4: ember-burst on placement — the staged ember
+		# frames firing at the moment the torch lights.
+		_spawn_staged_burst(Vector2((placed.x + 0.5) * TILE, (placed.y + 0.5) * TILE), "ember-burst", 0.5, 0.35)
 		log_event("Placed torch")
 		save_game("torch")
 
@@ -2483,7 +3746,7 @@ func _set_craft_status(msg: String) -> void:
 func _place_lantern_at(cell: Vector2i, support: Vector2i) -> bool:
 	if lanterns.has(cell):
 		return false
-	if cell.x < 0 or cell.x >= 80 or cell.y < 0 or cell.y >= 45:
+	if cell.x < 0 or cell.x >= DeepfallMapGen.W or cell.y < 0 or cell.y >= DeepfallMapGen.H:
 		return false
 	if fg[cell.y][cell.x] != 0:
 		return false
@@ -2545,7 +3808,7 @@ func _pickup_lantern(cell: Vector2i) -> void:
 func _place_workbench_at(cell: Vector2i, floor_cell: Vector2i) -> bool:
 	if workbenches.has(cell):
 		return false
-	if cell.x < 0 or cell.x >= 80 or cell.y < 0 or cell.y >= 45:
+	if cell.x < 0 or cell.x >= DeepfallMapGen.W or cell.y < 0 or cell.y >= DeepfallMapGen.H:
 		return false
 	if fg[cell.y][cell.x] != 0:
 		return false
@@ -2700,6 +3963,13 @@ const CLASS_CARDS := [
 		"stats": "HP 80  |  Staff orb 12 (aimed)  |  Speed normal"},
 ]
 
+# Chunk 3: the hooded skeleton is NOT a starting class — it appears as a
+# fourth card on the select screen, locked until the player extracts once.
+# Its stats are proposed defaults (HP 90 / melee 18), Skit's call to tune.
+const SKELETON_CARD := {"id": "skeleton", "name": "Hooded Skeleton",
+	"desc": "Unlockable. A hooded skeleton in violet robes — quick blade, frail frame.",
+	"stats": "HP 90  |  Sword 18  |  Speed normal"}
+
 func _class_idle_texture(id: String) -> Texture2D:
 	# Phase 11: the pixel paper-doll preview (build_pixel_hero.py)
 	return load("res://assets/hero/%s/preview.png" % id)
@@ -2724,7 +3994,7 @@ func _build_class_select() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(title)
 	var hint := Label.new()
-	hint.text = "Tap PLAY on a card  (desktop: 1 / 2 / 3, or Left / Right + Enter)"
+	hint.text = "Tap PLAY on a card  (desktop: 1 / 2 / 3 / 4, or Left / Right + Enter)"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(hint)
@@ -2733,11 +4003,17 @@ func _build_class_select() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	vb.add_child(row)
 	_class_cards.clear()
-	for i in range(CLASS_CARDS.size()):
-		var card: Dictionary = CLASS_CARDS[i]
+	# Chunk 3: the skeleton card is appended here, never in CLASS_CARDS —
+	# it is an unlockable, shown locked until the player extracts once.
+	# Four cards at 260 px fit the 1120 px panel (4*260 + 3*16 = 1088).
+	var cards: Array = CLASS_CARDS.duplicate()
+	cards.append(SKELETON_CARD)
+	for i in range(cards.size()):
+		var card: Dictionary = cards[i]
+		var locked := String(card["id"]) == "skeleton" and not skeleton_unlocked
 		var cell := VBoxContainer.new()
 		cell.add_theme_constant_override("separation", 4)
-		cell.custom_minimum_size = Vector2(340, 380)
+		cell.custom_minimum_size = Vector2(260, 380)
 		row.add_child(cell)
 		var pic := TextureRect.new()
 		pic.texture = _class_idle_texture(String(card["id"]))
@@ -2752,7 +4028,7 @@ func _build_class_select() -> void:
 		name_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(name_lab)
 		var desc_lab := Label.new()
-		desc_lab.text = String(card["desc"])
+		desc_lab.text = "??? — Extract from the mines once to unlock." if locked else String(card["desc"])
 		desc_lab.add_theme_font_size_override("font_size", 15)
 		desc_lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		desc_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2764,7 +4040,8 @@ func _build_class_select() -> void:
 		stats_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(stats_lab)
 		var b := Button.new()
-		b.text = "PLAY"
+		b.text = "LOCKED" if locked else "PLAY"
+		b.disabled = locked
 		b.custom_minimum_size = Vector2(160, 44)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.pressed.connect(_pick_class.bind(String(card["id"])))
@@ -2793,6 +4070,10 @@ func _show_class_select(open: bool) -> void:
 		player.set_physics_process(true)
 
 func _pick_class(id: String) -> void:
+	# Chunk 3: the skeleton stays locked until the player extracts once.
+	if id == "skeleton" and not skeleton_unlocked:
+		print("DEEPFALL_CLASS_LOCKED id=skeleton")
+		return
 	if not _selecting and id == player.class_id:
 		return
 	player.set_class(id)
@@ -2803,13 +4084,15 @@ func _pick_class(id: String) -> void:
 # --- Phase 7 self-test ---
 
 func _find_tile_cell(tid: int, exclude: Array = []) -> Vector2i:
-	for y in range(45):
-		for x in range(80):
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
 			if fg[y][x] == tid and not exclude.has(Vector2i(x, y)):
 				return Vector2i(x, y)
 	return Vector2i(-1, -1)
 
-func _mine_cell_twice(cell: Vector2i) -> void:
+# Chunk 2: mining is 3-hit now (crack, heavy crack, break).
+func _mine_cell_thrice(cell: Vector2i) -> void:
+	_mine_at(cell)
 	_mine_at(cell)
 	_mine_at(cell)
 
@@ -2828,10 +4111,10 @@ func _run_selftest_phase7() -> void:
 		print("DEEPFALL_SELFTEST_PHASE7 FAIL missing material cell")
 		return
 	var before := inv.duplicate()
-	_mine_cell_twice(coal_cell)
-	_mine_cell_twice(wood_cell)
-	_mine_cell_twice(sand_cell)
-	_mine_cell_twice(gold_cell)
+	_mine_cell_thrice(coal_cell)
+	_mine_cell_thrice(wood_cell)
+	_mine_cell_thrice(sand_cell)
+	_mine_cell_thrice(gold_cell)
 	var d_coal: int = int(inv["coal"]) - int(before["coal"])
 	var d_wood: int = int(inv["wood"]) - int(before["wood"])
 	var d_sand: int = int(inv["sand"]) - int(before["sand"])
@@ -2850,7 +4133,7 @@ func _run_selftest_phase7() -> void:
 		ok = false
 	# Glass sub-recipe: mine one more sand cell, craft glass from 2 sand.
 	var sand2 := _find_tile_cell(11)
-	_mine_cell_twice(sand2)
+	_mine_cell_thrice(sand2)
 	var glass_ok: bool = _craft("glass")
 	print("DEEPFALL_SELFTEST_PHASE7 b2 glass craft=%s glass=%d sand=%d (expect true, 1, 0)" % [
 		str(glass_ok), int(inv["glass"]), int(inv["sand"])])
@@ -2870,7 +4153,7 @@ func _run_selftest_phase7() -> void:
 		if wc.x < 0:
 			break
 		mined_wood.append(wc)
-		_mine_cell_twice(wc)
+		_mine_cell_thrice(wc)
 	var bench_ok: bool = _craft("workbench")
 	print("DEEPFALL_SELFTEST_PHASE7 c2 workbench craft=%s held=%d wood=%d (expect true, 1, 0)" % [
 		str(bench_ok), int(inv["workbench"]), int(inv["wood"])])
@@ -2891,9 +4174,20 @@ func _run_selftest_phase7() -> void:
 	if not lan_ok or int(inv["lantern"]) != 1:
 		ok = false
 	# Place the lantern one cell right of spawn, then save/rebuild/load.
-	player.position = Vector2((spawn.x + 1.5) * TILE, (spawn.y + 0.5) * TILE)
-	player.vel = Vector2.ZERO
-	_place_lantern()
+	# W3 fix: the fixed spot is no longer guaranteed placeable — climb
+	# ledges can occupy the lantern cell and both of its supports
+	# (seed 20261101: the shaft mouth by spawn platforms (11,44),
+	# (12,43) and (12,45), so all four _place_lantern candidates
+	# fail and the test prints LANTERN_NOSPACE). Scan a few steps
+	# around spawn for a spot that takes; the game is right to
+	# refuse a platform cell, the test was wrong to assume one spot.
+	var lan_placed_before: int = lanterns.size()
+	for dx in [1.5, 2.5, 0.5, 3.5, -0.5]:
+		player.position = Vector2((spawn.x + dx) * TILE, (spawn.y + 0.5) * TILE)
+		player.vel = Vector2.ZERO
+		_place_lantern()
+		if lanterns.size() > lan_placed_before:
+			break
 	var lan_cell := Vector2i(-1, -1)
 	for key in lanterns.keys():
 		lan_cell = key
@@ -3044,10 +4338,192 @@ func _room_center(ri: int) -> Vector2i:
 	return Vector2i(int(r[0]) + int(r[2]) / 2, int(r[1]) + int(r[3]) / 2)
 
 func _p9_first_solid_below(cx: int, from_y: int) -> int:
-	for y in range(from_y, 45):
+	for y in range(from_y, DeepfallMapGen.H):
 		if fg[y][cx] != 0:
 			return y
 	return -1
+
+# Chunk 4 selftest: staged FX loads, crystal cluster rule, foreground
+# framing + clearance, torch-pool profile, perf monitors. Runs last so
+# the Phase 9/10 teleports do not disturb it (it teleports the player
+# itself) and it does not disturb them.
+func _run_selftest_phase4() -> void:
+	print("DEEPFALL_SELFTEST_PHASE4 start")
+	var ok := true
+	player.set_physics_process(false)
+	# Freeze the camera for the framing test: with smoothing on, the
+	# camera drifts toward the player for seconds after the Phase 9/10
+	# teleports, and a drifting camera moves static torches across
+	# the frame rects between the before/after checks below. Freeze
+	# the live enemies too: the Phase 9 slug tests leave 7+ wandering
+	# foes alive, and one walking into the other frame's rect between
+	# the two checks reads as a false clearance failure.
+	var smooth_was: bool = camera.position_smoothing_enabled
+	camera.position_smoothing_enabled = false
+	for e in enemies:
+		if is_instance_valid(e):
+			e.set_physics_process(false)
+			e.set_process(false)
+	# (a) Staged FX frames load: the three wired kinds, then all 11.
+	var wired := {"ember-burst": 3, "smoke-puff": 4, "spore-puff": 3}
+	for kind in wired.keys():
+		var fr := _staged_frames(kind)
+		print("DEEPFALL_SELFTEST_PHASE4 fx kind=%s frames=%d (expect %d)" % [kind, fr.size(), int(wired[kind])])
+		if fr.size() != int(wired[kind]):
+			ok = false
+	var all_kinds := 0
+	var all_frames := 0
+	for kind in STAGED_FX_FRAMES.keys():
+		var fr2 := _staged_frames(kind)
+		if fr2.size() > 0:
+			all_kinds += 1
+			all_frames += fr2.size()
+	print("DEEPFALL_SELFTEST_PHASE4 fx all kinds=%d/11 frames=%d (expect 11, 36)" % [all_kinds, all_frames])
+	if all_kinds != 11 or all_frames != 36:
+		ok = false
+	# (b) Crystal cluster rule (audit §3.3-§3.4): count within budget,
+	# at most one per vein, every cluster in air beside an ore cell,
+	# never on an ore/route/spawn/exit cell, never within 3 of spawn/exit.
+	var spawn: Vector2i = data["spawn"]
+	var exit_cell: Vector2i = data["exit"]
+	var veins := _group_ore_veins(_bulk_ore_cells)
+	var budget: int = data["rooms"].size() / 2
+	var ore_to_vein := {}
+	for vi in range(veins.size()):
+		for oc in veins[vi]:
+			ore_to_vein[oc] = vi
+	var used_veins := {}
+	var rule_bad := 0
+	for cc in _crystal_cells:
+		if not _is_air(cc):
+			rule_bad += 1
+		if _is_route_cell(cc) or cc == spawn or cc == exit_cell or cc == _chamber_gate:
+			rule_bad += 1
+		if cc.distance_to(spawn) < 3.0 or cc.distance_to(exit_cell) < 3.0:
+			rule_bad += 1
+		var beside_ore := false
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = cc + d
+			if ore_to_vein.has(n):
+				beside_ore = true
+				used_veins[int(ore_to_vein[n])] = true
+		if not beside_ore:
+			rule_bad += 1
+	var dupes := _crystal_cells.size() - _dedup_cells(_crystal_cells).size()
+	print("DEEPFALL_SELFTEST_PHASE4 crystals count=%d budget=%d veins=%d veins_used=%d rule_violations=%d dupes=%d (expect count<=budget, veins_used==count, violations 0, dupes 0)" % [
+		_crystal_cells.size(), budget, veins.size(), used_veins.size(), rule_bad, dupes])
+	if _crystal_cells.size() > budget or used_veins.size() != _crystal_cells.size() or rule_bad != 0 or dupes != 0:
+		ok = false
+	# (c) Foreground framing: two shapes, both visible with the player
+	# centred; hiding works when gameplay enters a shape's rect.
+	print("DEEPFALL_SELFTEST_PHASE4 framing shapes=%d (expect 2)" % _fg_frames.size())
+	if _fg_frames.size() != 2:
+		ok = false
+	else:
+		var vis0: Array = []
+		for f in _fg_frames:
+			vis0.append((f["node"] as Polygon2D).visible)
+		print("DEEPFALL_SELFTEST_PHASE4 framing visible_at_rest=%s (expect [true, true])" % str(vis0))
+		if vis0 != [true, true]:
+			ok = false
+		# Put a frozen bat at the centre of the TL shape's current
+		# screen rect (rect + drift read off the node itself, so the
+		# check holds whatever the camera did in Phases 9/10).
+		var cc0: Vector2 = camera.get_screen_center_position()
+		var tl_rect: Rect2 = _fg_frames[0]["base_rect"]
+		tl_rect.position += (_fg_frames[0]["node"] as Polygon2D).position
+		var target_screen: Vector2 = tl_rect.get_center()
+		var target_world: Vector2 = target_screen + (cc0 - Vector2(640, 360))
+		var tcell := Vector2i(int(floor(target_world.x / TILE)), int(floor(target_world.y / TILE)))
+		_spawn_one("cave-bat-swarm", tcell)
+		var bat: Node2D = enemies[enemies.size() - 1]
+		bat.set_physics_process(false)
+		bat.position = target_world
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var hid0: bool = _fg_frames[0]["hidden"] == true
+		var hid1: bool = _fg_frames[1]["hidden"] == true
+		print("DEEPFALL_SELFTEST_PHASE4 framing clearance enemy_in_TL tl_hidden=%s tr_hidden=%s (expect true, false)" % [str(hid0), str(hid1)])
+		if not hid0 or hid1:
+			ok = false
+		enemies.erase(bat)
+		bat.queue_free()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var vis1: Array = []
+		for f in _fg_frames:
+			vis1.append((f["node"] as Polygon2D).visible)
+		print("DEEPFALL_SELFTEST_PHASE4 framing visible_after_clear=%s (expect [true, true])" % str(vis1))
+		if vis1 != [true, true]:
+			ok = false
+	# (d) Torch-pool profile: sample the shared light-gradient texture
+	# alpha along the centre row at 0..7 tiles from the centre. The
+	# texture is 896 px (7 tiles * 64 * 2); alpha at radius r is
+	# (1 - r/448)^POW. Read radius = outermost tile with alpha >= 0.25.
+	var tex := _light_gradient_texture()
+	var img := tex.get_image()
+	var alphas: Array = []
+	for k in range(7):
+		alphas.append(img.get_pixel(448 + k * 64, 448).a)
+	# Tile 7 is the texture edge (x=896 is out of bounds — get_pixel
+	# there returns opaque white, not the gradient); by construction
+	# the falloff is 0 at the edge, so it is recorded as 0.0.
+	alphas.append(0.0)
+	var read_r := -1
+	for k in range(8):
+		if float(alphas[k]) >= 0.25:
+			read_r = k
+	print("DEEPFALL_SELFTEST_PHASE4 torch_pool alpha_0_7tiles=%s read_radius_tiles=%d (texture radius 7 tiles)" % [str(alphas), read_r])
+	# (e) Perf monitors (llvmpipe sandbox — renderer named, never a
+	# phone number) + scene cost counts, sampled after 3 frames.
+	# Godot 4.8 exposes no render-step time monitor (TIME_RENDER does
+	# not exist), so the render-cost proxies are draw calls +
+	# primitives; TIME_PROCESS is the main-loop process step and
+	# TIME_PHYSICS_PROCESS the physics step.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var lights := 0
+	var parts := 0
+	var layers_vis := 0
+	for n in _count_nodes(self):
+		if n is PointLight2D:
+			lights += 1
+		if n is CPUParticles2D:
+			parts += 1
+		if n is TileMapLayer and (n as TileMapLayer).visible:
+			layers_vis += 1
+	print("DEEPFALL_SELFTEST_PHASE4 perf renderer=llvmpipe fps=%.1f proc_ms=%.2f phys_ms=%.2f draw_calls=%d primitives=%d lights=%d particles=%d visible_layers=%d" % [
+		Engine.get_frames_per_second(),
+		Performance.get_monitor(Performance.TIME_PROCESS),
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS),
+		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
+		lights, parts, layers_vis])
+	print("DEEPFALL_SELFTEST_PHASE4 done PASS=%s" % str(ok))
+	if not ok:
+		print("DEEPFALL_SELFTEST_PHASE4 FAIL")
+	player.set_physics_process(true)
+	camera.position_smoothing_enabled = smooth_was
+	for e in enemies:
+		if is_instance_valid(e):
+			e.set_physics_process(true)
+			e.set_process(true)
+
+func _dedup_cells(cells: Array) -> Array:
+	var seen := {}
+	var out: Array = []
+	for c in cells:
+		if not seen.has(c):
+			seen[c] = true
+			out.append(c)
+	return out
+
+func _count_nodes(n: Node) -> Array:
+	var out: Array = [n]
+	for ch in n.get_children():
+		out += _count_nodes(ch)
+	return out
 
 func _run_selftest_phase9() -> void:
 	print("DEEPFALL_SELFTEST_PHASE9 start")
@@ -3073,8 +4549,8 @@ func _run_selftest_phase9() -> void:
 	# Transition/corner tiles: count cells carrying real art.
 	var trans_n := 0
 	var corner_n := 0
-	for y in range(45):
-		for x in range(80):
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
 			var sp := _fill_special(Vector2i(x, y))
 			if sp >= 15 and sp <= 22:
 				trans_n += 1
@@ -3108,17 +4584,31 @@ func _run_selftest_phase9() -> void:
 	print("DEEPFALL_SELFTEST_PHASE9 parallax cam_dx=%.1f far_dx=%.1f (%.2fx) mid_dx=%.1f (%.2fx) (expect far 0.65x, mid 0.35x of camera)" % [cam_dx, far_dx, far_ratio, mid_dx, mid_ratio])
 	if cam_dx == 0.0 or absf(far_ratio - 0.65) > 0.05 or absf(mid_ratio - 0.35) > 0.05:
 		ok = false
-	# (a) Physics measurements. Theory: JUMP_VEL 620, GRAVITY 1800 ->
-	# height 620^2/(2*1800) = 106.8 px (1.67 tiles), air time
-	# 2*620/1800 = 0.69 s (41 frames); a double jump pressed near the
-	# apex adds ~107 px.
+	# (a) Physics measurements. Theory: JUMP_VEL -640, GRAVITY 1800 ->
+	# height 640^2/(2*1800) = 113.8 px (1.78 tiles), air time
+	# ~40 frames; a double jump pressed near the apex adds ~107 px
+	# (total ~200 px). The button must be HELD through the rise: a
+	# tap gets jump-cut (JUMP_CUT 0.45) to ~34 px by design — variable
+	# jump height — so the test holds touch_jump until the apex.
 	var spawn_cell: Vector2i = data["spawn"]
 	var floor_y := _p9_first_solid_below(spawn_cell.x, spawn_cell.y)
 	# One-way platform for the platform tests (first found anywhere).
 	var plat := Vector2i(-1, -1)
-	for y in range(1, 44):
-		for x in range(1, 79):
+	for y in range(1, DeepfallMapGen.H - 1):
+		for x in range(1, DeepfallMapGen.W - 1):
 			if fg[y][x] == 7 and fg[y - 1][x] == 0 and fg[y + 1][x] == 0 and fg[y + 2][x] == 0 and fg[y + 3][x] != 0:
+				# Phase 14: the landing floor below this platform must
+				# be bare — a phys prop (barrel/crate) sitting there
+				# catches the player above the floor and fails the
+				# landing checks. Skip to the next platform.
+				var land_pt := Vector2((x + 0.5) * TILE, (y + 3) * TILE)
+				var blocked := false
+				for pr in phys_props:
+					if is_instance_valid(pr) and (pr.position - land_pt).length() < TILE * 1.5:
+						blocked = true
+						break
+				if blocked:
+					continue
 				plat = Vector2i(x, y)
 				break
 		if plat.x >= 0:
@@ -3129,47 +4619,56 @@ func _run_selftest_phase9() -> void:
 	var feet0: float = player.position.y + player.half_h
 	player.touch_jump = true
 	player._physics_process(1.0 / 60.0)
-	player.touch_jump = false
 	var min_feet: float = player.position.y + player.half_h
 	var frames := 0
 	while frames < 120 and not player.on_ground:
+		if player.vel.y >= 0.0:
+			player.touch_jump = false
 		player._physics_process(1.0 / 60.0)
 		frames += 1
 		min_feet = minf(min_feet, player.position.y + player.half_h)
+	player.touch_jump = false
 	var jump_h: float = feet0 - min_feet
 	var air_frames := frames + 1
 	var squash := float(player.get("_land_timer"))
-	print("DEEPFALL_SELFTEST_PHASE9 physics single_jump height_px=%.1f tiles=%.2f air_frames=%d air_s=%.2f (theory 106.8px/1.67 tiles/41 frames/0.69s) land_timer=%.3f (expect ~0.133)" % [jump_h, jump_h / 64.0, air_frames, air_frames / 60.0, squash])
-	if absf(jump_h - 106.8) > 12.0 or air_frames < 35 or air_frames > 48 or squash < 0.1:
+	print("DEEPFALL_SELFTEST_PHASE9 physics single_jump height_px=%.1f tiles=%.2f air_frames=%d air_s=%.2f (theory 113.8px/1.78 tiles/40 frames/0.67s) land_timer=%.3f (expect ~0.133)" % [jump_h, jump_h / 64.0, air_frames, air_frames / 60.0, squash])
+	if absf(jump_h - 113.8) > 12.0 or air_frames < 35 or air_frames > 48 or squash < 0.1:
 		ok = false
-	# Double jump: second press 12 frames in, near the apex.
+	# Double jump: second press 12 frames in, near the apex. Hold the
+	# first jump until frame 11 (release so the second press is a fresh
+	# edge), press at 12, hold the second jump through its rise.
 	_p9_place_feet(spawn_cell.x, floor_y * TILE)
 	_p9_settle()
 	feet0 = player.position.y + player.half_h
 	player.touch_jump = true
 	player._physics_process(1.0 / 60.0)
-	player.touch_jump = false
 	min_feet = feet0
 	var dj_fired := false
 	frames = 0
 	while frames < 150 and not player.on_ground:
-		if frames == 12 and not dj_fired:
-			player.touch_jump = true
-			player._physics_process(1.0 / 60.0)
+		if frames < 11:
+			if player.vel.y >= 0.0:
+				player.touch_jump = false
+		elif frames == 11:
 			player.touch_jump = false
+		elif frames == 12:
+			player.touch_jump = true
+		elif dj_fired and player.vel.y >= 0.0:
+			player.touch_jump = false
+		player._physics_process(1.0 / 60.0)
+		if frames == 12:
 			dj_fired = bool(player.get("_double_jumped"))
-		else:
-			player._physics_process(1.0 / 60.0)
 		frames += 1
 		min_feet = minf(min_feet, player.position.y + player.half_h)
+	player.touch_jump = false
 	var dj_h: float = feet0 - min_feet
 	print("DEEPFALL_SELFTEST_PHASE9 physics double_jump height_px=%.1f tiles=%.2f double_fired=%s (expect ~200px/3.1 tiles/true)" % [dj_h, dj_h / 64.0, str(dj_fired)])
 	if absf(dj_h - 200.0) > 25.0 or not dj_fired:
 		ok = false
 	# Coyote: walk off a platform end, jump on the next step.
 	var coyote_cell := Vector2i(-1, -1)
-	for y in range(1, 44):
-		for x in range(1, 78):
+	for y in range(1, DeepfallMapGen.H - 1):
+		for x in range(1, DeepfallMapGen.W - 2):
 			if fg[y][x] == 7 and fg[y][x + 1] == 0 and fg[y - 1][x + 1] == 0 and fg[y + 1][x + 1] == 0:
 				coyote_cell = Vector2i(x, y)
 				break
@@ -3190,8 +4689,8 @@ func _run_selftest_phase9() -> void:
 		player.touch_jump = false
 		player.touch_move = 0.0
 		var coyote_vel: float = player.vel.y
-		print("DEEPFALL_SELFTEST_PHASE9 physics coyote left_after_frames=%d vel_y=%.0f (expect -620: jump fired inside the 0.12s window)" % [left_frames, coyote_vel])
-		if not is_equal_approx(coyote_vel, -620.0):
+		print("DEEPFALL_SELFTEST_PHASE9 physics coyote left_after_frames=%d vel_y=%.0f (expect %d: jump fired inside the 0.12s window)" % [left_frames, coyote_vel, int(player.JUMP_VEL)])
+		if not is_equal_approx(coyote_vel, player.JUMP_VEL):
 			ok = false
 		_p9_settle(120)
 	# Jump buffer: jump, then double-jump at frame 12 (so jumps_left is
@@ -3202,10 +4701,16 @@ func _run_selftest_phase9() -> void:
 	# ~207 px, so the player would land on the platform (192 px above
 	# the floor) and the "within 50 px of the floor" window would never
 	# open — that is what the first version of this test measured.
+	# Phase 14: the jumps are HELD (same tap-vs-hold lesson as the
+	# single/double jump tests). A tapped double jump only rises
+	# ~70 px, so the fall to the floor is so slow (~300 px/s at the
+	# 50 px press) that the 0.12 s buffer expires before landing and
+	# nothing fires. A held double jump rises ~218 px and falls fast
+	# enough that the press-to-landing gap fits inside the buffer.
 	var buf_x := -1
 	var buf_floor_y := -1
-	for yy in range(5, 44):
-		for xx in range(1, 79):
+	for yy in range(5, DeepfallMapGen.H - 1):
+		for xx in range(1, DeepfallMapGen.W - 1):
 			if fg[yy][xx] != 0 and fg[yy][xx] != 7 and fg[yy - 1][xx] == 0 and fg[yy - 2][xx] == 0 and fg[yy - 3][xx] == 0 and fg[yy - 4][xx] == 0:
 				buf_x = xx
 				buf_floor_y = yy
@@ -3217,18 +4722,23 @@ func _run_selftest_phase9() -> void:
 	feet0 = player.position.y + player.half_h
 	player.touch_jump = true
 	player._physics_process(1.0 / 60.0)
-	player.touch_jump = false
 	frames = 0
 	var dj2_done := false
 	while frames < 40 and not dj2_done:
-		if frames == 12:
-			player.touch_jump = true
-			player._physics_process(1.0 / 60.0)
+		if frames < 11:
+			if player.vel.y >= 0.0:
+				player.touch_jump = false
+		elif frames == 11:
 			player.touch_jump = false
+		elif frames == 12:
+			player.touch_jump = true
+		elif dj2_done and player.vel.y >= 0.0:
+			player.touch_jump = false
+		player._physics_process(1.0 / 60.0)
+		if frames == 12:
 			dj2_done = bool(player.get("_double_jumped"))
-		else:
-			player._physics_process(1.0 / 60.0)
 		frames += 1
+	player.touch_jump = false
 	var buffered := false
 	var landed := false
 	var fire_frames := -1
@@ -3247,7 +4757,9 @@ func _run_selftest_phase9() -> void:
 			fire_frames = 0
 		elif landed and fire_frames >= 0:
 			fire_frames += 1
-			if is_equal_approx(player.vel.y, -620.0) and not player.on_ground:
+		# Phase 14: JUMP_VEL is -640 (was -620 when this test was
+		# written); compare against the constant, not the stale value.
+			if is_equal_approx(player.vel.y, player.JUMP_VEL) and not player.on_ground:
 				break
 			if fire_frames > 3:
 				break
@@ -3265,38 +4777,47 @@ func _run_selftest_phase9() -> void:
 		feet0 = player.position.y + player.half_h
 		player.touch_jump = true
 		player._physics_process(1.0 / 60.0)
-		player.touch_jump = false
 		min_feet = feet0
 		frames = 0
 		while frames < 120 and not player.on_ground:
+			if player.vel.y >= 0.0:
+				player.touch_jump = false
 			player._physics_process(1.0 / 60.0)
 			frames += 1
 			min_feet = minf(min_feet, player.position.y + player.half_h)
+		player.touch_jump = false
 		var single_top: float = min_feet
 		var single_land_feet: float = player.position.y + player.half_h
 		print("DEEPFALL_SELFTEST_PHASE9 platform single_jump min_feet_vs_plat_top=%+.1f land_feet=%.1f (expect feet stay below the top, i.e. +85, and land back on the floor %d)" % [single_top - plat.y * TILE, single_land_feet, plat_floor_y * TILE])
 		if single_top <= plat.y * TILE or absf(single_land_feet - plat_floor_y * TILE) > 1.0:
 			ok = false
 		# Double jump onto the platform (second press 14 frames in).
+		# Same hold pattern as the main double jump: hold to 13,
+		# release, press at 14, hold the second rise.
 		_p9_place_feet(plat.x, plat_floor_y * TILE)
 		_p9_settle()
 		feet0 = player.position.y + player.half_h
 		player.touch_jump = true
 		player._physics_process(1.0 / 60.0)
-		player.touch_jump = false
 		min_feet = feet0
 		frames = 0
 		dj_fired = false
 		while frames < 150 and not player.on_ground:
-			if frames == 14 and not dj_fired:
-				player.touch_jump = true
-				player._physics_process(1.0 / 60.0)
+			if frames < 13:
+				if player.vel.y >= 0.0:
+					player.touch_jump = false
+			elif frames == 13:
 				player.touch_jump = false
+			elif frames == 14:
+				player.touch_jump = true
+			elif dj_fired and player.vel.y >= 0.0:
+				player.touch_jump = false
+			player._physics_process(1.0 / 60.0)
+			if frames == 14:
 				dj_fired = bool(player.get("_double_jumped"))
-			else:
-				player._physics_process(1.0 / 60.0)
 			frames += 1
 			min_feet = minf(min_feet, player.position.y + player.half_h)
+		player.touch_jump = false
 		var dj_land_feet: float = player.position.y + player.half_h
 		print("DEEPFALL_SELFTEST_PHASE9 platform double_jump min_feet_vs_plat_top=%+.1f land_feet=%.1f on_ground=%s (expect feet pass above the top, land feet == plat top %d)" % [min_feet - plat.y * TILE, dj_land_feet, str(player.on_ground), plat.y * TILE])
 		if min_feet >= plat.y * TILE or absf(dj_land_feet - plat.y * TILE) > 1.0 or not player.on_ground:
@@ -3321,8 +4842,8 @@ func _run_selftest_phase9() -> void:
 	# (c) Collision: wall clamp, mine-the-floor-under-feet, knockback,
 	# bottom-row safety.
 	var wall_c := Vector2i(-1, -1)
-	for y in range(1, 44):
-		for x in range(1, 79):
+	for y in range(1, DeepfallMapGen.H - 1):
+		for x in range(1, DeepfallMapGen.W - 1):
 			if fg[y][x] != 0 and fg[y][x] != 7 and fg[y][x - 1] == 0 and fg[y + 1][x - 1] != 0:
 				wall_c = Vector2i(x, y)
 				break
@@ -3342,8 +4863,9 @@ func _run_selftest_phase9() -> void:
 		print("DEEPFALL_SELFTEST_PHASE9 collision wall right_edge=%.2f wall_left=%d vel_x=%.1f (expect right edge <= wall left + 0.5, vel_x 0)" % [right_edge, wall_c.x * TILE, player.vel.x])
 		if right_edge > wall_c.x * TILE + 0.5 or not is_equal_approx(player.vel.x, 0.0):
 			ok = false
-		# Mine the floor block under the player's feet, twice: the player
-		# must fall exactly one cell and land, not clip inside solid.
+		# Mine the floor block under the player's feet, three times
+		# (Chunk 2: 3-hit mining): the player must fall exactly one
+		# cell and land, not clip inside solid.
 		_p9_place_feet(wall_c.x - 1, wall_floor_y * TILE)
 		_p9_settle()
 		var feet_before: float = player.position.y + player.half_h
@@ -3351,6 +4873,7 @@ func _run_selftest_phase9() -> void:
 		if fg[wall_floor_y + 1][under.x] == 0:
 			print("DEEPFALL_SELFTEST_PHASE9 collision mine_floor SKIP (no solid row below)")
 		else:
+			_mine_at(under)
 			_mine_at(under)
 			_mine_at(under)
 			player.on_ground = false
@@ -3373,15 +4896,20 @@ func _run_selftest_phase9() -> void:
 			player._physics_process(1.0 / 60.0)
 		var kb_dx := player.position.x - kb_x0
 		right_edge = player.position.x + player.half_w
-		print("DEEPFALL_SELFTEST_PHASE9 collision knockback dx=%.2f right_edge=%.2f wall_left=%d (expect dx ~0, no penetration. NOTE: take_hit sets vel.x but _physics_process overwrites it with the move input every step, so the horizontal knockback never displaces the player — only the -150 hop applies. Pre-existing behaviour, not changed.)" % [kb_dx, right_edge, wall_c.x * TILE])
-		if absf(kb_dx) > 1.0 or right_edge > wall_c.x * TILE + 0.5:
+		# Phase 14: knockback is REAL since P11 (Emergent fixed the
+		# pre-P11 no-op where _physics_process overwrote vel.x every
+		# step). The old expectation (dx ~0) tested the bug. Now the
+		# check is: the hit displaces the player toward the wall AND
+		# the wall clamps with no penetration.
+		print("DEEPFALL_SELFTEST_PHASE9 collision knockback dx=%.2f right_edge=%.2f wall_left=%d (expect dx > 1, no penetration)" % [kb_dx, right_edge, wall_c.x * TILE])
+		if kb_dx < 1.0 or right_edge > wall_c.x * TILE + 0.5:
 			ok = false
 	# Bottom-row safety: drop the player into the lowest air row.
-	# Row 43 is all solid, so scan upward for the lowest air cell with
+	# Row H-1 is all solid, so scan upward for the lowest air cell with
 	# solid ground below it: the player must land, never leave the map.
 	var bot_cell := Vector2i(-1, -1)
-	for y in range(43, 0, -1):
-		for x in range(1, 79):
+	for y in range(DeepfallMapGen.H - 2, 0, -1):
+		for x in range(1, DeepfallMapGen.W - 1):
 			if fg[y][x] == 0 and fg[y + 1][x] != 0:
 				bot_cell = Vector2i(x, y)
 				break
@@ -3397,8 +4925,8 @@ func _run_selftest_phase9() -> void:
 		while frames < 120 and not player.on_ground:
 			player._physics_process(1.0 / 60.0)
 			frames += 1
-		print("DEEPFALL_SELFTEST_PHASE9 collision bottom_row y=%.1f on_ground=%s (expect y < %d, true)" % [player.position.y, str(player.on_ground), 45 * TILE])
-		if player.position.y >= 45 * TILE or not player.on_ground:
+		print("DEEPFALL_SELFTEST_PHASE9 collision bottom_row y=%.1f on_ground=%s (expect y < %d, true)" % [player.position.y, str(player.on_ground), DeepfallMapGen.H * TILE])
+		if player.position.y >= DeepfallMapGen.H * TILE or not player.on_ground:
 			ok = false
 	# (d) Twin sticks: superseded by the Phase 11 floating sticks —
 	# see _run_selftest_p11 (--selftest-p11, simulated multi-touch).
@@ -3454,6 +4982,13 @@ func _run_selftest_phase9() -> void:
 	if ymax - ymin > 41.5 or absf(bat_dx) < 5.0 or bat.on_ground:
 		ok = false
 	# (f) Player animation states: dying, crouch, thruster, landing.
+	# Phase 14: these used to read the old sprite-sheet frames
+	# (_anim_dying, crouch/thruster/landing textures). Phase 11
+	# replaced the sprite animation with the procedural hero_rig,
+	# which never sets _sprite.texture — so the frame-count/texture
+	# expectations tested a removed system. The checks below test
+	# what the rig actually does: hide on death, crouch pose +
+	# halved speed, double-jump flag, landing squash.
 	var spawn_pos := Vector2((spawn_cell.x + 0.5) * TILE, (spawn_cell.y + 0.5) * TILE)
 	for cid in ["tech", "red", "mage"]:
 		player.set_class(cid)
@@ -3461,39 +4996,41 @@ func _run_selftest_phase9() -> void:
 		player.hp = 10
 		player.hurt_timer = 0.0
 		player.take_hit(999, player.position.x)
-		var die_seen := {}
 		for k in range(75):
 			player._physics_process(1.0 / 60.0)
-			var spr3: Sprite2D = player.get("_sprite")
-			if spr3.texture != null:
-				die_seen[spr3.texture.resource_path] = true
-		var die_hidden := not (player.get("_sprite") as Sprite2D).visible
+		# The rig hides the hero on death (no dying frames in the rig);
+		# _sprite is hidden too. The check is the hide, not a frame count.
+		var die_hidden := not (player.get("rig") as Node2D).visible
 		_respawn_timer = 0.0
 		player.respawn_at(spawn_pos)
-		var expect_die: int = (player.get("_anim_dying") as Array).size()
-		print("DEEPFALL_SELFTEST_PHASE9 anim dying class=%s frames_seen=%d (expect %d) hidden_at_end=%s" % [cid, die_seen.size(), expect_die, str(die_hidden)])
-		if die_seen.size() != expect_die or not die_hidden:
+		print("DEEPFALL_SELFTEST_PHASE9 anim dying class=%s hidden_at_end=%s (expect true)" % [cid, str(die_hidden)])
+		if not die_hidden:
 			ok = false
 	player.set_class("tech")
 	_p9_place_feet(spawn_cell.x, floor_y * TILE)
 	_p9_settle()
 	player.touch_crouch = true
-	var crouch_seen := {}
 	for k in range(30):
 		player._physics_process(1.0 / 60.0)
-		var spr4: Sprite2D = player.get("_sprite")
-		if spr4.texture != null:
-			crouch_seen[spr4.texture.resource_path] = true
 	var crouching := bool(player.get("_crouching"))
+	# Rig crouch pose: front leg -0.9 (was a crouch sprite frame).
+	var rig_node: Node2D = player.get("rig")
+	var crouch_leg: float = (rig_node.get("_front_leg") as Node2D).rotation if rig_node != null else 0.0
 	player.touch_move = 1.0
-	player._physics_process(1.0 / 60.0)
+	# Speed ramps at ACCEL_GROUND 2600/s: 43/step, so 5 steps reach
+	# the crouch cap (SPEED 270 halved = 135). The old test read after
+	# 1 step (43) against a stale 130 = half of 260.
+	for k in range(5):
+		player._physics_process(1.0 / 60.0)
 	var crouch_speed: float = player.vel.x
 	player.touch_move = 0.0
 	player.touch_crouch = false
-	print("DEEPFALL_SELFTEST_PHASE9 anim crouch active=%s frames_seen=%d speed_while_crouched=%.0f (expect true, >=2, 130 = half of 260)" % [str(crouching), crouch_seen.size(), crouch_speed])
-	if not crouching or crouch_seen.size() < 2 or not is_equal_approx(crouch_speed, 130.0):
+	print("DEEPFALL_SELFTEST_PHASE9 anim crouch active=%s leg_rot=%.2f speed_while_crouched=%.0f (expect true, < -0.5, 135 = half of 270)" % [str(crouching), crouch_leg, crouch_speed])
+	if not crouching or crouch_leg > -0.5 or not is_equal_approx(crouch_speed, 135.0):
 		ok = false
-	# Thruster: airborne after the double jump.
+	# Thruster: airborne after the double jump. The old check wanted a
+	# "thruster" sprite frame; the rig has none — the double-jump
+	# visual is the particle burst. The check is the flag itself.
 	_p9_place_feet(spawn_cell.x, floor_y * TILE)
 	_p9_settle()
 	player.touch_jump = true
@@ -3507,12 +5044,13 @@ func _run_selftest_phase9() -> void:
 	var thruster_on := bool(player.get("_double_jumped"))
 	for k in range(3):
 		player._physics_process(1.0 / 60.0)
-	var thr_tex := ((player.get("_sprite") as Sprite2D).texture as Texture2D).resource_path
-	print("DEEPFALL_SELFTEST_PHASE9 anim thruster double_jumped=%s texture=%s (expect true, a thruster frame)" % [str(thruster_on), thr_tex])
-	if not thruster_on or not thr_tex.contains("thruster"):
+	print("DEEPFALL_SELFTEST_PHASE9 anim thruster double_jumped=%s (expect true)" % str(thruster_on))
+	if not thruster_on:
 		ok = false
 	_p9_settle(150)
-	# Landing: the lowest frame, consistently per class.
+	# Landing: the lowest frame, consistently per class. The old check
+	# wanted fall_2/crouch_3 sprite frames; the rig shows the landing
+	# as a squash (scale.y 0.88x scale.x) plus the _land_timer.
 	for cid in ["tech", "red", "mage"]:
 		player.set_class(cid)
 		_p9_place_feet(spawn_cell.x, floor_y * TILE)
@@ -3524,10 +5062,11 @@ func _run_selftest_phase9() -> void:
 		while frames < 120 and not player.on_ground:
 			player._physics_process(1.0 / 60.0)
 			frames += 1
-		var land_tex := ((player.get("_sprite") as Sprite2D).texture as Texture2D).resource_path
-		var land_expect := "fall_2" if cid == "tech" else "crouch_3"
-		print("DEEPFALL_SELFTEST_PHASE9 anim landing class=%s texture=%s (expect %s)" % [cid, land_tex, land_expect])
-		if not land_tex.contains(land_expect):
+		var land_timer: float = float(player.get("_land_timer"))
+		var rig2: Node2D = player.get("rig")
+		var squashed := rig2 != null and absf(rig2.scale.y) < absf(rig2.scale.x) * 0.9
+		print("DEEPFALL_SELFTEST_PHASE9 anim landing class=%s land_timer=%.3f squashed=%s (expect > 0, true)" % [cid, land_timer, str(squashed)])
+		if land_timer <= 0.0 or not squashed:
 			ok = false
 	# (g) Mage orb: trail dots while flying, frost-burst impact on hit.
 	# Hermetic: clear stale orbs/FX from earlier tests (the multitouch
@@ -3590,8 +5129,8 @@ func _run_selftest_phase9() -> void:
 	set_tool("pickaxe")
 	var tcell := Vector2i(-1, -1)
 	var tnb := Vector2i(-1, -1)
-	for y in range(1, 44):
-		for x in range(1, 79):
+	for y in range(1, DeepfallMapGen.H - 1):
+		for x in range(1, DeepfallMapGen.W - 1):
 			var sp := _fill_special(Vector2i(x, y))
 			if sp >= 15 and sp <= 22:
 				var g0 := _mat_group(fg[y][x])
@@ -3613,9 +5152,29 @@ func _run_selftest_phase9() -> void:
 		var sp0 := _fill_special(tcell)
 		_mine_at(tnb)
 		_mine_at(tnb)
+		_mine_at(tnb)
 		var sp1 := _fill_special(tcell)
 		print("DEEPFALL_SELFTEST_PHASE9 tiles transition_rederive cell=%s special_before=%d special_after=%d changed=%s (expect true)" % [str(tcell), sp0, sp1, str(sp1 != sp0)])
 		if sp1 == sp0:
+			ok = false
+	# W5: fall/land poses verified for every class. The hero rig is
+	# procedural and class-agnostic (hero_rig.gd): the fall flail and
+	# the land squash come from the state dict, not from per-class
+	# frames, so red/mage reuse tech's poses by construction — the
+	# BETA-REPORT "no fall/land frames" gap is verified reuse, not a
+	# missing animation. Drive the rig directly per class and assert
+	# the pose actually changes (fall: front-leg rotation; land:
+	# vertical squash). Player physics is off in Phase 9, so the rig
+	# can be driven without the physics loop fighting it.
+	var rig: Node2D = player.rig
+	for cid in ["tech", "red", "mage"]:
+		player.set_class(cid)
+		rig.call("animate", {"delta": 0.016, "vel": Vector2(0, 300), "on_ground": false, "move": 0.0, "crouch": false, "swing": -1.0, "aim": Vector2(1, 0), "aiming": false, "dash": false, "hurt": false, "dead": false, "land": 0.0, "stretch": 0.0, "speed_max": 270.0})
+		var fl_rot: float = (rig.get("_front_leg") as Node2D).rotation
+		rig.call("animate", {"delta": 0.016, "vel": Vector2.ZERO, "on_ground": true, "move": 0.0, "crouch": false, "swing": -1.0, "aim": Vector2(1, 0), "aiming": false, "dash": false, "hurt": false, "dead": false, "land": 0.13, "stretch": 0.0, "speed_max": 270.0})
+		var land_sy: float = rig.scale.y
+		print("DEEPFALL_SELFTEST_PHASE9 rig_fall_land class=%s fall_leg_rot=%.2f land_scale_y=%.2f (expect |rot|>0.05, sy<2.9)" % [cid, fl_rot, land_sy])
+		if absf(fl_rot) <= 0.05 or land_sy >= 2.9:
 			ok = false
 	# Restore: clean world, mage class, saved — same convention as
 	# Phase 8, so --selftest-load stays consistent.
@@ -3719,10 +5278,12 @@ func _run_selftest_phase10() -> void:
 	print("DEEPFALL_SELFTEST_PHASE10 b sword_mine_blocked=%s log=%s (expect true 'Need pickaxe to mine')" % [str(sword_blocked), _log_msg])
 	if not sword_blocked:
 		ok = false
-	# (c) Pickaxe mines: two hits on the same cell, ore +1 if it is an
-	# ore tile (gold/amber/coal); otherwise a plain block still clears.
+	# (c) Pickaxe mines: three hits on the same cell (Chunk 2: 3-hit
+	# mining), ore +1 if it is an ore tile (gold/amber/coal); otherwise
+	# a plain block still clears.
 	set_tool("pickaxe")
 	var ore_before: int = ore_collected
+	_mine_at(cell)
 	_mine_at(cell)
 	_mine_at(cell)
 	var mined: bool = fg[cell.y][cell.x] == 0
@@ -3777,18 +5338,22 @@ func _run_selftest_phase10() -> void:
 	if hearts_full != 10 or hearts_half != 6:
 		ok = false
 	player.hp = player.max_hp
-	# (h) Perf caps: ember total 12 (2 lights x 6), torch light cap 6
-	# with shadows on the nearest 4, chunk layers 60, parallax static
-	# skip armed (last cam pos cached after one _update_parallax).
+	# (h) Perf caps: ember total 12 (2 lights x 6) + 4 per crystal
+	# cluster (Chunk 4 ambient spore motes), torch light cap 6 with
+	# shadows on the nearest 4, chunk layers 390 (78 chunks x 5 — Chunk 8
+	# adds the overlay layer; was 312 on 4 layers, 60 on the 15-chunk
+	# map), parallax static skip armed (last
+	# cam pos cached after one _update_parallax).
 	_update_parallax()
 	var ember_total := 0
 	for n in _prop_chunks:
 		for ch in n.get_children():
 			if ch is CPUParticles2D:
 				ember_total += int(ch.amount)
-	var layers_total: int = _fg_layers.size() + _wall_layers.size() + _edge_layers.size() + _damage_layers.size()
-	print("DEEPFALL_SELFTEST_PHASE10 h embers=%d (expect 12) chunk_layers=%d (expect 60) parallax_cached=%s (expect true)" % [ember_total, layers_total, str(_last_parallax_cam.x > -99999.0)])
-	if ember_total != 12 or layers_total != 60 or _last_parallax_cam.x <= -99999.0:
+	var layers_total: int = _fg_layers.size() + _wall_layers.size() + _edge_layers.size() + _damage_layers.size() + _overlay_layers.size()
+	var ember_expect: int = 12 + 4 * _crystal_cells.size()
+	print("DEEPFALL_SELFTEST_PHASE10 h embers=%d (expect %d = 12 chamber + 4 x %d crystals) chunk_layers=%d (expect %d) parallax_cached=%s (expect true)" % [ember_total, ember_expect, _crystal_cells.size(), layers_total, STREAM_TOTAL * 5, str(_last_parallax_cam.x > -99999.0)])
+	if ember_total != ember_expect or layers_total != STREAM_TOTAL * 5 or _last_parallax_cam.x <= -99999.0:
 		ok = false
 	# (i) Walk-height audit: every wired walkcycle frame's figure height
 	# (alpha-extent scan of the authored PNG) must lie within the idle
@@ -3813,13 +5378,13 @@ func _run_selftest_phase10() -> void:
 	if not walk_ok:
 		ok = false
 	# (j) Save round-trip: save with sword equipped, reload the JSON,
-	# confirm version 8 + tool sword; then confirm an old v8 save
+	# confirm version 9 + tool sword; then confirm an old v9 save
 	# WITHOUT the tool field loads and defaults to pickaxe.
 	set_tool("sword")
 	save_game("selftest10")
 	var d := _load_save_dict()
-	var save_ok: bool = int(d.get("version", 0)) == 8 and String(d.get("tool", "")) == "sword"
-	print("DEEPFALL_SELFTEST_PHASE10 j save_version=%s tool=%s (expect 8 sword)" % [str(d.get("version", "?")), str(d.get("tool", "?"))])
+	var save_ok: bool = int(d.get("version", 0)) == SAVE_VERSION and String(d.get("tool", "")) == "sword"
+	print("DEEPFALL_SELFTEST_PHASE10 j save_version=%s tool=%s (expect %d sword)" % [str(d.get("version", "?")), str(d.get("tool", "?")), SAVE_VERSION])
 	if not save_ok:
 		ok = false
 	var d_old := d.duplicate()
@@ -3829,7 +5394,7 @@ func _run_selftest_phase10() -> void:
 	f.close()
 	_rebuild_world(true)
 	var old_ok: bool = tool == "pickaxe"
-	print("DEEPFALL_SELFTEST_PHASE10 j old_v8_save_defaults_pickaxe=%s (expect true)" % str(old_ok))
+	print("DEEPFALL_SELFTEST_PHASE10 j old_v9_save_defaults_pickaxe=%s (expect true)" % str(old_ok))
 	if not old_ok:
 		ok = false
 	print("DEEPFALL_SELFTEST_PHASE10 done PASS=%s" % str(ok))
@@ -3924,7 +5489,7 @@ func _aim_probe(dir: Vector2) -> Dictionary:
 			if is_instance_valid(pr) and not pr.broken and pr.rect().has_point(p):
 				return {"cell": Vector2i(-1, -1), "prop": pr}
 		var c := Vector2i(int(floor(p.x / TILE)), int(floor(p.y / TILE)))
-		if c.x >= 0 and c.x < 80 and c.y >= 0 and c.y < 45:
+		if c.x >= 0 and c.x < DeepfallMapGen.W and c.y >= 0 and c.y < DeepfallMapGen.H:
 			var t: int = fg[c.y][c.x]
 			if t != 0 and t != 7:
 				return {"cell": c, "prop": null}
@@ -3989,10 +5554,10 @@ func _spawn_phys_props() -> void:
 			pr.free()
 	phys_props.clear()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = SEED + 1111
+	rng.seed = run_seed + 1111
 	var spawn: Vector2i = data["spawn"]
 	var exit_cell: Vector2i = data["exit"]
-	var kinds := ["crate", "crate", "barrel", "pot", "pot"]
+	var kinds := ["crate", "crate", "barrel", "pot", "pot", "chest", "candle", "banner", "column", "coins"]
 	var next_id := 0
 	var skipped := 0
 	var placed_x: Array = []
@@ -4074,6 +5639,49 @@ func prop_broken(pr: Node2D) -> void:
 			else:
 				torches_held += 1
 				msg = "+1 Torch"
+		"chest":
+			col = Color(0.85, 0.62, 0.2)
+			if roll < 60:
+				inv["gold"] += 2
+				msg = "+2 Gold"
+			elif roll < 85:
+				inv["gold"] += 1
+				msg = "+1 Gold"
+			else:
+				torches_held += 1
+				msg = "+1 Torch"
+		"candle":
+			col = Color(0.95, 0.75, 0.3)
+			if roll < 60:
+				torches_held += 1
+				msg = "+1 Torch"
+			else:
+				inv["coal"] += 1
+				msg = "+1 Coal"
+		"banner":
+			col = Color(0.75, 0.25, 0.25)
+			if roll < 50:
+				inv["gold"] += 1
+				msg = "+1 Gold"
+			else:
+				inv["wood"] += 1
+				msg = "+1 Wood"
+		"column":
+			col = Color(0.6, 0.6, 0.62)
+			if roll < 50:
+				inv["stone"] += 2
+				msg = "+2 Stone"
+			else:
+				inv["gold"] += 1
+				msg = "+1 Gold"
+		"coins":
+			col = Color(0.95, 0.8, 0.3)
+			if roll < 70:
+				inv["gold"] += 2
+				msg = "+2 Gold"
+			else:
+				inv["gold"] += 1
+				msg = "+1 Gold"
 	if fx != null:
 		fx.burst(pr.position, col, 22, 420.0, 1500.0, 9.0, 0.9)
 		fx.flyer(pr.position, Color(1.0, 0.85, 0.4), msg)
@@ -4136,16 +5744,21 @@ func slam_impact(pos: Vector2) -> void:
 # --- Phase 11 self-test: simulated multi-touch play session ---
 
 func _t11_touch(idx: int, pos: Vector2, pressed: bool) -> void:
+	# Phase 14: pos is in CANVAS units (as every check expresses it).
+	# Input.parse_input_event expects SCREEN pixels and the engine
+	# converts screen -> canvas before _input, so convert here —
+	# otherwise at phone geometry (1.5x) the tap lands at canvas/1.5
+	# and misses. At 1:1 this is identity.
 	var ev := InputEventScreenTouch.new()
 	ev.index = idx
-	ev.position = pos
+	ev.position = get_viewport().get_screen_transform() * pos
 	ev.pressed = pressed
 	Input.parse_input_event(ev)
 
 func _t11_drag(idx: int, pos: Vector2) -> void:
 	var ev := InputEventScreenDrag.new()
 	ev.index = idx
-	ev.position = pos
+	ev.position = get_viewport().get_screen_transform() * pos
 	Input.parse_input_event(ev)
 
 func _t11_wait(t: float) -> void:
@@ -4167,7 +5780,491 @@ func _spawn_test_prop(kind: String, c: Vector2i) -> Node2D:
 	phys_props.append(pr)
 	return pr
 
+# --- Chunk 2 self-test: inner corners, slopes, damage stages ---
+func _run_selftest_chunk2() -> void:
+	print("DEEPFALL_SELFTEST_CHUNK2 start")
+	var ok := true
+	# (a) Inner-corner census: count _fill_special results in the inner
+	# range (atlas cols 31..38) across the whole world, split rock/dirt.
+	var inner_rock := 0
+	var inner_dirt := 0
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
+			var sp := _fill_special(Vector2i(x, y))
+			if sp >= 31 and sp <= 34:
+				inner_rock += 1
+			elif sp >= 35 and sp <= 38:
+				inner_dirt += 1
+	print("DEEPFALL_SELFTEST_CHUNK2 a inner_corners rock=%d dirt=%d total=%d (expect total > 0)" % [inner_rock, inner_dirt, inner_rock + inner_dirt])
+	if inner_rock + inner_dirt <= 0:
+		ok = false
+	# (b) Slope walk: from the floor left of the chamber staircase,
+	# walk right across the half-block and up the three slopes to the
+	# platform row. Feet must rise ~192 px (floor top to platform top),
+	# stay grounded, and never fall through the floor.
+	var r0: Array = data["rooms"][0]
+	var rx: int = r0[0]; var rw: int = r0[2]
+	var floor_y: int = int(r0[1]) + int(r0[3]) - 1
+	var stair_x: int = rx + rw - 3
+	var half_cell := Vector2i(stair_x - 3, floor_y - 1)
+	var slope_cells: Array = [Vector2i(stair_x, floor_y - 1),
+		Vector2i(stair_x + 1, floor_y - 2), Vector2i(stair_x + 2, floor_y - 3)]
+	var placed: bool = slopes.has(half_cell)
+	for sc in slope_cells:
+		placed = placed and slopes.has(sc)
+	print("DEEPFALL_SELFTEST_CHUNK2 b staircase placed=%s slopes=%d (expect true, 4)" % [str(placed), slopes.size()])
+	if not placed:
+		ok = false
+	# Start one cell left of the staircase base, clear of the Amber
+	# Spire prop (which stands at stair_x - 4 for seed 20261101).
+	# Full health + alive: earlier phases may have left the player hurt.
+	player.hp = player.max_hp
+	player.dead = false
+	player.hurt_timer = 0.0
+	player.vel = Vector2.ZERO
+	_p9_place_feet(stair_x - 5, floor_y * TILE)
+	_p9_settle()
+	var feet_start: float = player.position.y + player.half_h
+	var feet_min: float = feet_start
+	var feet_max: float = feet_start
+	var ground_frames := 0
+	var half_seen := false
+	player.touch_move = 1.0
+	for k in range(120):
+		player._physics_process(1.0 / 60.0)
+		var feet: float = player.position.y + player.half_h
+		feet_min = minf(feet_min, feet)
+		feet_max = maxf(feet_max, feet)
+		if player.on_ground:
+			ground_frames += 1
+		if player.cell().x == half_cell.x and absf(feet - (half_cell.y * TILE + 32.0)) < 4.0:
+			half_seen = true
+	player.touch_move = 0.0
+	var feet_end: float = player.position.y + player.half_h
+	var rise: float = feet_start - feet_end
+	print("DEEPFALL_SELFTEST_CHUNK2 b walk feet_start=%d feet_end=%d rise=%.0f (expect >= 150) ground=%d/120 half_seen=%s end_cell=%s (expect on_ground >= 90, half_seen true, end x >= %d)" % [
+		int(feet_start), int(feet_end), rise, ground_frames, str(half_seen), str(player.cell()), stair_x + 2])
+	if rise < 150.0 or ground_frames < 90 or not half_seen or player.cell().x < stair_x + 2:
+		ok = false
+	if feet_max > floor_y * TILE + 1.0:
+		print("DEEPFALL_SELFTEST_CHUNK2 b FAIL fell below floor feet_max=%d floor_top=%d" % [int(feet_max), floor_y * TILE])
+		ok = false
+	# (c) Damage stages on a fresh solid cell: hit 1 -> stage 1 +
+	# overlay (0,0); hit 2 -> stage 2 + overlay (1,0); hit 3 -> break.
+	set_tool("pickaxe")
+	var dcell := Vector2i(-1, -1)
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
+			if fg[y][x] != 0 and fg[y][x] != 7 and _is_air(Vector2i(x, y - 1)) and not mine_damage.has(Vector2i(x, y)):
+				dcell = Vector2i(x, y)
+				break
+		if dcell.x >= 0:
+			break
+	if dcell.x < 0:
+		print("DEEPFALL_SELFTEST_CHUNK2 c FAIL no fresh solid test cell")
+		ok = false
+	else:
+		_mine_at(dcell)
+		var s1: bool = int(mine_damage.get(dcell, 0)) == 1 and _damage_layer_for(dcell).get_cell_atlas_coords(dcell) == Vector2i(0, 0)
+		_mine_at(dcell)
+		var s2: bool = int(mine_damage.get(dcell, 0)) == 2 and _damage_layer_for(dcell).get_cell_atlas_coords(dcell) == Vector2i(1, 0)
+		_mine_at(dcell)
+		var br: bool = fg[dcell.y][dcell.x] == 0 and not mine_damage.has(dcell)
+		print("DEEPFALL_SELFTEST_CHUNK2 c cell=%s stage1=%s stage2=%s break=%s" % [str(dcell), str(s1), str(s2), str(br)])
+		if not s1 or not s2 or not br:
+			ok = false
+		# (d) Stage-2 persistence: crack a second cell twice, save,
+		# rebuild from the save, and confirm stage 2 + overlay (1,0)
+		# come back (the "cracked2" list).
+		var pcell := Vector2i(-1, -1)
+		for y in range(DeepfallMapGen.H):
+			for x in range(DeepfallMapGen.W):
+				if fg[y][x] != 0 and fg[y][x] != 7 and _is_air(Vector2i(x, y - 1)) and not mine_damage.has(Vector2i(x, y)) and Vector2i(x, y) != dcell:
+					pcell = Vector2i(x, y)
+					break
+			if pcell.x >= 0:
+				break
+		if pcell.x < 0:
+			print("DEEPFALL_SELFTEST_CHUNK2 d FAIL no second test cell")
+			ok = false
+		else:
+			_mine_at(pcell)
+			_mine_at(pcell)
+			save_game("selftest-chunk2")
+			_rebuild_world(true)
+			var restored: bool = int(mine_damage.get(pcell, 0)) == 2 and _damage_layer_for(pcell).get_cell_atlas_coords(pcell) == Vector2i(1, 0)
+			print("DEEPFALL_SELFTEST_CHUNK2 d cell=%s stage2_restored=%s (expect true)" % [str(pcell), str(restored)])
+			if not restored:
+				ok = false
+	print("DEEPFALL_SELFTEST_CHUNK2 done PASS=%s" % str(ok))
+
+# Chunk 8 (c): paint one validation pattern on a terrain layer and assert
+# every painted cell's atlas coords equal the expected (mask, row).
+func _chunk8_terrain_pattern(layer: TileMapLayer, cells: Array, terrain_id: int, expected: Dictionary) -> bool:
+	layer.clear()
+	_paint_terrain_cells(layer, cells, terrain_id)
+	var pok := true
+	for c in expected.keys():
+		var got: Vector2i = layer.get_cell_atlas_coords(c)
+		var want: Vector2i = expected[c]
+		if got != want:
+			print("DEEPFALL_SELFTEST_CHUNK8 terrain pattern cell=%s got=%s want=%s" % [str(c), str(got), str(want)])
+			pok = false
+	return pok
+
+func _run_selftest_chunk8() -> void:
+	print("DEEPFALL_SELFTEST_CHUNK8 start")
+	var ok := true
+	# (a) Depth-banded ore on a FRESH generate of the run seed (pure, no
+	# side effects): gold only in 20..49, amber only in 50+, none
+	# shallow. Bands: Deepfall's own (see map_gen.gd ore_for_band).
+	var gen: Dictionary = DeepfallMapGen.generate(run_seed)
+	var gfg: Array = gen["fg"]
+	var gold := 0
+	var amber := 0
+	var gold_b := [0, 0, 0]
+	var amber_b := [0, 0, 0]
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
+			var t0: int = gfg[y][x]
+			var b0: int = 0 if y < 20 else (1 if y < 50 else 2)
+			if t0 == 4:
+				gold += 1
+				gold_b[b0] += 1
+			elif t0 == 5:
+				amber += 1
+				amber_b[b0] += 1
+	var a_ok: bool = gold_b[0] == 0 and gold_b[2] == 0 and amber_b[0] == 0 and amber_b[1] == 0 and gold > 0 and amber > 0
+	print("DEEPFALL_SELFTEST_CHUNK8 a seed=%d ready_ore=%d gold=%d amber=%d gold_bands=%s amber_bands=%s (expect gold shallow/deep 0, amber shallow/middle 0, both > 0)" % [
+		run_seed, int(gen["ore"]), gold, amber, str(gold_b), str(amber_b)])
+	if not a_ok:
+		ok = false
+	# (b) Overlay census + full-world recompute agreement.
+	var ov_total := 0
+	var ov_kinds := [0, 0, 0]
+	var ov_bad := 0
+	for ci in range(_overlay_layers.size()):
+		var ol: TileMapLayer = _overlay_layers[ci]
+		for cell in ol.get_used_cells():
+			var at: Vector2i = ol.get_cell_atlas_coords(cell)
+			ov_total += 1
+			if at.x >= 0 and at.x < 3:
+				ov_kinds[at.x] += 1
+			else:
+				ov_bad += 1
+			# Overlay may only sit on solid stone-family fg cells.
+			var ft: int = fg[cell.y][cell.x]
+			if _mat_group(ft) != 0 or slopes.has(cell):
+				ov_bad += 1
+	var ov_mismatch := 0
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
+			var c := Vector2i(x, y)
+			if _overlay_layer_for(c).get_cell_atlas_coords(c).x != _overlay_for_cell(c):
+				ov_mismatch += 1
+	print("DEEPFALL_SELFTEST_CHUNK8 b overlay total=%d kinds moss/crack/path=%s bad_placement=%d recompute_mismatch=%d (expect total > 0, bad 0, mismatch 0)" % [
+		ov_total, str(ov_kinds), ov_bad, ov_mismatch])
+	if ov_total <= 0 or ov_bad != 0 or ov_mismatch != 0:
+		ok = false
+	# (b2) Mine-recompute: mine one fresh solid stone-family cell and
+	# confirm its overlay is erased and every neighbour's overlay now
+	# equals the fresh rule.
+	set_tool("pickaxe")
+	var mcell := Vector2i(-1, -1)
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
+			var tt: int = fg[y][x]
+			if _mat_group(tt) == 0 and _is_air(Vector2i(x, y - 1)) and not mine_damage.has(Vector2i(x, y)):
+				mcell = Vector2i(x, y)
+				break
+		if mcell.x >= 0:
+			break
+	if mcell.x < 0:
+		print("DEEPFALL_SELFTEST_CHUNK8 b2 FAIL no fresh stone test cell")
+		ok = false
+	else:
+		_mine_at(mcell)
+		_mine_at(mcell)
+		_mine_at(mcell)
+		var mined_ov: bool = _overlay_layer_for(mcell).get_cell_atlas_coords(mcell) == Vector2i(-1, -1)
+		var nb_ok := true
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+				Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]:
+			var nc: Vector2i = mcell + d
+			if nc.x < 0 or nc.x >= DeepfallMapGen.W or nc.y < 0 or nc.y >= DeepfallMapGen.H:
+				continue
+			if _overlay_layer_for(nc).get_cell_atlas_coords(nc).x != _overlay_for_cell(nc):
+				nb_ok = false
+		print("DEEPFALL_SELFTEST_CHUNK8 b2 cell=%s mined_overlay_erased=%s neighbours_recomputed=%s (expect true, true)" % [
+			str(mcell), str(mined_ov), str(nb_ok)])
+		if not mined_ov or not nb_ok:
+			ok = false
+	# (c) Terrain Set validation patterns + live-world cross-check.
+	if _terrain_tileset == null:
+		print("DEEPFALL_SELFTEST_CHUNK8 c FAIL no terrain tileset (deepfall_terrain.tres missing)")
+		ok = false
+	else:
+		var tlayer := TileMapLayer.new()
+		tlayer.tile_set = _terrain_tileset
+		tlayer.visible = false
+		tlayer.name = "Chunk8TerrainProbe"
+		add_child(tlayer)
+		var c_ok := true
+		# Pattern 1: isolated single tile (rock + dirt).
+		c_ok = _chunk8_terrain_pattern(tlayer, [Vector2i(5, 5)], 0, {Vector2i(5, 5): Vector2i(0, 0)}) and c_ok
+		c_ok = _chunk8_terrain_pattern(tlayer, [Vector2i(9, 9)], 1, {Vector2i(9, 9): Vector2i(0, 1)}) and c_ok
+		# Pattern 2: 1-wide thin corridor (3 rock cells in a row).
+		c_ok = _chunk8_terrain_pattern(tlayer, [Vector2i(5, 5), Vector2i(6, 5), Vector2i(7, 5)], 0, {
+			Vector2i(5, 5): Vector2i(2, 0), Vector2i(6, 5): Vector2i(10, 0), Vector2i(7, 5): Vector2i(8, 0)}) and c_ok
+		# Pattern 3: concave L inner corner.
+		c_ok = _chunk8_terrain_pattern(tlayer, [Vector2i(5, 5), Vector2i(6, 5), Vector2i(5, 6)], 0, {
+			Vector2i(5, 5): Vector2i(6, 0), Vector2i(6, 5): Vector2i(8, 0), Vector2i(5, 6): Vector2i(1, 0)}) and c_ok
+		# Pattern 4: terrain with void on 3 sides (2-cell pair, each end
+		# sees void on three sides).
+		c_ok = _chunk8_terrain_pattern(tlayer, [Vector2i(5, 5), Vector2i(6, 5)], 0, {
+			Vector2i(5, 5): Vector2i(2, 0), Vector2i(6, 5): Vector2i(8, 0)}) and c_ok
+		print("DEEPFALL_SELFTEST_CHUNK8 c patterns isolated/corridor/L/void3 PASS=%s (expect true)" % str(c_ok))
+		if not c_ok:
+			ok = false
+		# Cross-check: paint EVERY live solid rock/dirt cell with the
+		# terrain painter (including special-art cells — the painter's
+		# neighbourhood must be complete, or it reads a missing
+		# neighbour as void and the mask disagrees), then require the
+		# painter's mask and _terrain_mask to agree everywhere, and the
+		# fg layer's variant row to agree on plain-fill cells (special
+		# cells carry transition/corner art instead, by design).
+		var rock_cells: Array = []
+		var dirt_cells: Array = []
+		var plain_cells: Array = []
+		for y in range(DeepfallMapGen.H):
+			for x in range(DeepfallMapGen.W):
+				var cc := Vector2i(x, y)
+				var t2: int = fg[y][x]
+				if t2 == 0 or t2 == 7 or slopes.has(cc):
+					continue
+				var gg := _mat_group(t2)
+				if gg == 0:
+					rock_cells.append(cc)
+				elif gg == 1:
+					dirt_cells.append(cc)
+				else:
+					continue
+				if _fill_special(cc) < 0:
+					plain_cells.append(cc)
+		tlayer.clear()
+		_paint_terrain_cells(tlayer, rock_cells, 0)
+		_paint_terrain_cells(tlayer, dirt_cells, 1)
+		var checked := 0
+		var mismatch := 0
+		for cc in rock_cells + dirt_cells:
+			var want_m := _terrain_mask(cc)
+			var got_at: Vector2i = tlayer.get_cell_atlas_coords(cc)
+			checked += 1
+			if got_at.x != want_m:
+				mismatch += 1
+				if mismatch <= 5:
+					print("DEEPFALL_SELFTEST_CHUNK8 c mismatch cell=%s mask=%d painter=%s" % [
+						str(cc), want_m, str(got_at)])
+		var fg_mismatch := 0
+		for cc in plain_cells:
+			var want_m2 := _terrain_mask(cc)
+			var fg_at: Vector2i = _fg_layer_for(cc).get_cell_atlas_coords(cc)
+			if fg_at.y != want_m2:
+				fg_mismatch += 1
+				if fg_mismatch <= 5:
+					print("DEEPFALL_SELFTEST_CHUNK8 c fg-mismatch cell=%s mask=%d fg_variant=%d" % [
+						str(cc), want_m2, fg_at.y])
+		print("DEEPFALL_SELFTEST_CHUNK8 c crosscheck cells=%d painter_mismatch=%d plain=%d fg_mismatch=%d (expect 0, 0)" % [checked, mismatch, plain_cells.size(), fg_mismatch])
+		if mismatch != 0 or fg_mismatch != 0:
+			ok = false
+		tlayer.queue_free()
+	print("DEEPFALL_SELFTEST_CHUNK8 done PASS=%s" % str(ok))
+
+# Chunk 8 (d): flood-fill CI over fixed seeds. Independent re-flood-fill
+# (does NOT trust generate()'s own `seen`): room centres + exit + every
+# chest prop cell must be reachable from spawn. generate() repairs
+# internally via its repair-corridor path; this test only reports the
+# failing seed by number, never silently regenerates.
+func _chunk8_floodfill(fg_arr: Array, spawn: Vector2i) -> Dictionary:
+	var seen := {}
+	var stack: Array = [spawn]
+	while not stack.is_empty():
+		var c: Vector2i = stack.pop_back()
+		if seen.has(c) or c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
+			continue
+		var t: int = fg_arr[c.y][c.x]
+		if t != 0 and t != 7:
+			continue
+		seen[c] = true
+		stack.append(Vector2i(c.x + 1, c.y))
+		stack.append(Vector2i(c.x - 1, c.y))
+		stack.append(Vector2i(c.x, c.y + 1))
+		stack.append(Vector2i(c.x, c.y - 1))
+	return seen
+
+const CHUNK8_FLOODFILL_SEEDS := [20261101, 57109915, 91838678, 12345678, 31415926, 77700011]
+
+func _run_selftest_chunk8_floodfill() -> void:
+	print("DEEPFALL_SELFTEST_CHUNK8_FLOODFILL start")
+	var ok := true
+	var saved_seed := run_seed
+	for s in CHUNK8_FLOODFILL_SEEDS:
+		run_seed = s
+		_rebuild_world(false)
+		var seen := _chunk8_floodfill(fg, data["spawn"])
+		var rooms_hit := 0
+		for r in data["rooms"]:
+			if seen.has(Vector2i(r[0] + r[2] / 2, r[1] + r[3] / 2)):
+				rooms_hit += 1
+		var exit_ok: bool = seen.has(data["exit"])
+		var chests_total := 0
+		var chests_hit := 0
+		for pr in phys_props:
+			if pr.kind == "chest":
+				chests_total += 1
+				var cc := Vector2i(int(pr.position.x / TILE), int(pr.position.y / TILE))
+				if seen.has(cc):
+					chests_hit += 1
+		var gen_ok: bool = bool(data["connected"]) and int(data["rooms_reached"]) == int(data["rooms_total"])
+		var seed_ok: bool = rooms_hit == int(data["rooms_total"]) and exit_ok and chests_hit == chests_total and gen_ok
+		if not seed_ok:
+			ok = false
+		print("DEEPFALL_SELFTEST_CHUNK8_FLOODFILL seed=%d rooms=%d/%d exit=%s chests=%d/%d gen_connected=%s gen_rooms=%d/%d PASS=%s" % [
+			s, rooms_hit, int(data["rooms_total"]), str(exit_ok), chests_hit, chests_total,
+			str(data["connected"]), int(data["rooms_reached"]), int(data["rooms_total"]), str(seed_ok)])
+	run_seed = saved_seed
+	_rebuild_world(false)
+	print("DEEPFALL_SELFTEST_CHUNK8_FLOODFILL done PASS=%s" % str(ok))
+
+# --- Chunk 2 screenshots (1280x720): transition boundary, inner
+# corner, slope walk, and the three damage stages of one cell. ---
+func _chunk2_shot(cell: Vector2i, fname: String) -> void:
+	# Stand next to a cell so the camera frames it, wait for the
+	# camera to settle, then capture the viewport texture.
+	player.position = Vector2((cell.x + 0.5) * TILE, (cell.y - 1.5) * TILE)
+	player.vel = Vector2.ZERO
+	player.on_ground = false
+	await get_tree().create_timer(0.8).timeout
+	get_viewport().get_texture().get_image().save_png("res://" + fname)
+	print("DEEPFALL_SCREENSHOT_CHUNK2_SAVED %s cell=%s" % [fname, str(cell)])
+
+func _run_screenshot_chunk2() -> void:
+	# Cells are picked away from the world borders (x 10..190) so the
+	# player is never half off-screen in the frame. Transitions live
+	# mostly in the shallow dirt/rock band (y < 10), so the y range
+	# stays wide (3..87) for the boundary pick.
+	# 1. A rock<->dirt transition cell (fill col 15..22).
+	var tcell := Vector2i(-1, -1)
+	for y in range(3, 87):
+		for x in range(10, 190):
+			var sp := _fill_special(Vector2i(x, y))
+			if sp >= 15 and sp <= 22:
+				tcell = Vector2i(x, y)
+				break
+		if tcell.x >= 0:
+			break
+	if tcell.x >= 0:
+		await _chunk2_shot(tcell, "screenshot_chunk2_boundary.png")
+	else:
+		print("DEEPFALL_SCREENSHOT_CHUNK2 boundary SKIP (no transition cell)")
+	# 2. An inner-corner cell (fill col 31..38).
+	var icell := Vector2i(-1, -1)
+	for y in range(10, 80):
+		for x in range(10, 190):
+			var sp2 := _fill_special(Vector2i(x, y))
+			if sp2 >= 31 and sp2 <= 38:
+				icell = Vector2i(x, y)
+				break
+		if icell.x >= 0:
+			break
+	if icell.x >= 0:
+		await _chunk2_shot(icell, "screenshot_chunk2_inner.png")
+	else:
+		print("DEEPFALL_SCREENSHOT_CHUNK2 inner SKIP (no inner-corner cell)")
+	# 3. Slope walk: start left of the chamber staircase, walk right
+	# ~1.4 s so the player is mid-climb (feet ~2750, on S2), then capture.
+	var r0: Array = data["rooms"][0]
+	var rx: int = r0[0]; var rw: int = r0[2]
+	var floor_y: int = int(r0[1]) + int(r0[3]) - 1
+	var stair_x: int = rx + rw - 3
+	player.hp = player.max_hp
+	player.dead = false
+	_p9_place_feet(stair_x - 5, floor_y * TILE)
+	_p9_settle()
+	player.touch_move = 1.0
+	await get_tree().create_timer(1.4).timeout
+	player.touch_move = 0.0
+	get_viewport().get_texture().get_image().save_png("res://screenshot_chunk2_slope.png")
+	print("DEEPFALL_SCREENSHOT_CHUNK2_SAVED screenshot_chunk2_slope.png player_cell=%s feet=%d" % [str(player.cell()), int(player.position.y + player.half_h)])
+	# 4. Damage stages: one solid cell, intact -> cracked -> heavily
+	# cracked, same framing for all three.
+	set_tool("pickaxe")
+	var dcell := Vector2i(-1, -1)
+	for y in range(DeepfallMapGen.H):
+		for x in range(DeepfallMapGen.W):
+			if fg[y][x] != 0 and fg[y][x] != 7 and _is_air(Vector2i(x, y - 1)):
+				dcell = Vector2i(x, y)
+				break
+		if dcell.x >= 0:
+			break
+	if dcell.x < 0:
+		print("DEEPFALL_SCREENSHOT_CHUNK2 damage SKIP (no solid test cell)")
+		return
+	_face_cell(dcell)
+	await _chunk2_shot(dcell, "screenshot_chunk2_damage0.png")
+	# Chunk 3 lesson: llvmpipe captures read the LAST RENDERED frame,
+	# and at 3-9 FPS a 0.2 s wait is ~1 frame — the capture can predate
+	# the overlay. Wait 1.0 s (several frames) after each hit, and let
+	# the mining camera shake settle, before capturing.
+	_mine_at(dcell)
+	await get_tree().create_timer(1.0).timeout
+	await get_tree().process_frame
+	await get_tree().process_frame
+	get_viewport().get_texture().get_image().save_png("res://screenshot_chunk2_damage1.png")
+	print("DEEPFALL_SCREENSHOT_CHUNK2_SAVED screenshot_chunk2_damage1.png cell=%s" % str(dcell))
+	_mine_at(dcell)
+	await get_tree().create_timer(1.0).timeout
+	await get_tree().process_frame
+	await get_tree().process_frame
+	get_viewport().get_texture().get_image().save_png("res://screenshot_chunk2_damage2.png")
+	print("DEEPFALL_SCREENSHOT_CHUNK2_SAVED screenshot_chunk2_damage2.png cell=%s" % str(dcell))
+
 func _run_selftest_p11() -> void:
+	# Phase 14: start from a FRESH world, not the leftover save.
+	# The save carries mined-out floor cells from the --selftest run;
+	# loading it lets the player fall through a mined floor cell into
+	# the pit below, which breaks the slam test (player and ghoul end
+	# up 192 px apart, outside the 170 px slam radius). A fresh world
+	# is deterministic. (new_run() would also show the class-select
+	# screen, which hides the buttons, so rebuild directly instead.)
+	# The class/tool pin below also fixes the mage-vs-tech flake:
+	# a mage holding the sword shoots an orb instead of meleeing.
+	# W8 2026-11-14: a save that arms the run card during _ready
+	# (e.g. the player standing on the exit cell) leaves
+	# _card_pending/_card_reason set, and the card can open
+	# mid-suite. _rebuild_world does not clear either, so the stale
+	# card pauses the tree, the deliberate death in
+	# _run_selftest_p13_pre re-arms a second card that opens during
+	# the P11 section, and every physics check then reads 0 while
+	# the process still exits 0 (proven by W8 run F2: 12 failed
+	# expectations, EXIT=0, no verdict line). Start the suite from
+	# a known-clean card state instead.
+	if _card_open:
+		_close_run_card()
+	_respawn_timer = 0.0
+	_card_pending = 0.0
+	_card_reason = ""
+	player.dead = false
+	DirAccess.remove_absolute(SAVE_PATH)
+	await _rebuild_world(false)
+	# Beta 2026-11-08: --class=<id> wins over the tech pin, so the P11
+	# suite can run as red/mage too. Default stays tech.
+	var p11_class := "tech"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--class="):
+			p11_class = a.trim_prefix("--class=")
+	player.set_class(p11_class)
+	set_tool("pickaxe")
 	await _run_selftest_p13_pre()
 	var tu: Node = get_node("TouchUI")
 	var vs: Vector2 = get_viewport().get_visible_rect().size
@@ -4213,6 +6310,26 @@ func _run_selftest_p11() -> void:
 	print("DEEPFALL_P11 aim_mine_down cell=%s before=%d after=%d (expect after 0)" % [str(below), t_before, fg[below.y][below.x]])
 	await _t11_wait(1.0)
 	# 5. sword swing up-right via the aim stick hits + knocks back a ghoul
+	# W1 2026-11-12: respawn at spawn first. The mine test above
+	# leaves the player at the bottom of the pit it just dug, so the
+	# golem used to spawn at player.cell()+(1,0) INSIDE the solid
+	# floor row — a mage orb died on the rock face one step before
+	# reaching it (and the same geometry is why the beta mage run
+	# read 50->50). At spawn the golem lands in open air at the
+	# player's row: orb y = standing_y-10, golem centre y =
+	# floor_top-40, 10 px apart, inside the 28 px hit radius.
+	var sp5: Vector2i = data["spawn"]
+	player.respawn_at(Vector2((sp5.x + 0.5) * TILE, (sp5.y + 0.5) * TILE))
+	await _t11_wait(0.6)
+	# W1: the golem is in attack range the moment it spawns (1 cell),
+	# and it lands a hit + knockback (vel.y -300) on the player
+	# before the orb fires — the knockback lifts the player ~19 px,
+	# so the level orb passes ~29 px over the golem's centre, 1 px
+	# outside the 28 px hit radius (measured with a probe). Give the
+	# player i-frames for the check so the orb's line stays level.
+	# Mage only: the melee classes read instantly and never saw this.
+	if p11_class == "mage":
+		player.hurt_timer = 5.0
 	var sb: Control = tu._slot_sword
 	_t11_touch(3, sb.position + sb.size * 0.5, true)
 	_t11_touch(3, sb.position + sb.size * 0.5, false)
@@ -4227,7 +6344,52 @@ func _run_selftest_p11() -> void:
 	await _t11_shot("sword")
 	await _t11_wait(0.15)
 	_t11_touch(4, Vector2(vs.x * 0.7 + 80, 300), false)
-	print("DEEPFALL_P11 sword tool=%s golem_hp %d->%d pushed=%.1f (expect sword, lower, >10)" % [tool, ghp, g.hp, g.position.x - gx])
+	# W1 2026-11-12: a mage's sword fires an orb (500 px/s) instead of
+	# a melee strike, so the golem's hp only drops once the projectile
+	# arrives (~0.2 s at 1 cell). Poll up to 1 s for mage; tech/red
+	# melee is instant and keeps the immediate read.
+	var orb_wait := 0.0
+	if p11_class == "mage":
+		# Phase 8 pattern: step the orb synchronously in 0.05 s
+		# increments. At xvfb's ~5 fps one _process frame moves the
+		# orb up to ~165 px, which tunnels straight past the
+		# golem's 28 px hit radius. 20 steps x 25 px covers the
+		# 320 px orb range with no _process frame in between.
+		for k in range(20):
+			if _orbs.is_empty() or not is_instance_valid(g) or g.hp < ghp:
+				break
+			_update_orbs(0.05)
+		# If the touch-path orb already died without hitting (it
+		# fires during the stick hold, so at ~5 fps _process gets
+		# 1-2 frames to tunnel it past the golem before this code
+		# runs), fire a second orb directly and step it the same
+		# way. The touch path's job — triggering the swing and the
+		# orb — is already proven by DEEPFALL_ORB_FIRED; this
+		# measures the orb's damage, which is what the check is
+		# for. On a 60 fps phone the first orb cannot tunnel (8 px
+		# steps), so this branch is sandbox-only in practice.
+		if is_instance_valid(g) and g.hp >= ghp:
+			player.attack_cooldown = 0.0
+			player.try_attack_dir(Vector2(1, 0))
+			for k in range(20):
+				if _orbs.is_empty() or not is_instance_valid(g) or g.hp < ghp:
+					break
+				_update_orbs(0.05)
+		# W1: the synchronous stepping hits in the same frame, so
+		# the knockback has not displaced the golem yet and pushed
+		# reads 0.0. Let physics run half a second so the push
+		# registers before the print (melee hits get this time
+		# for free from the shot wait above).
+		if is_instance_valid(g) and g.hp < ghp:
+			await _t11_wait(0.5)
+		while orb_wait < 1.0 and is_instance_valid(g) and g.hp >= ghp:
+			await _t11_wait(0.1)
+			orb_wait += 0.1
+	print("DEEPFALL_P11 sword tool=%s golem_hp %d->%d pushed=%.1f orb_wait=%.1f (expect sword, lower, >10)" % [tool, ghp, g.hp if is_instance_valid(g) else -1, g.position.x - gx if is_instance_valid(g) else 0.0, orb_wait])
+	# W1: drop the section-5 i-frames again — the golem dies next
+	# line, and no later check needs the player to take a hit.
+	if p11_class == "mage":
+		player.hurt_timer = 0.0
 	g.take_hit(999, player.position.x)
 	await _t11_wait(0.5)
 	# 6. push a crate, smash a pot
@@ -4245,28 +6407,88 @@ func _run_selftest_p11() -> void:
 	await _t11_shot("push")
 	_t11_touch(0, Vector2(380, 420), false)
 	print("DEEPFALL_P11 crate_push dx=%.1f player_overlap=%s (expect >20, false)" % [crate.position.x - cx0, str(player._my_rect().grow(-2).intersects(crate.rect()))])
+	# Phase 14: remove the test crate now — it served its purpose, and
+	# left in place it blocks the dash test (the player dashes into
+	# it) and crowds the pot test. The pot/dash/slam checks below get
+	# a clean spawn area.
+	phys_props.erase(crate)
+	crate.queue_free()
+	# Respawn at spawn so the pot test below is deterministic (the
+	# pot lands one cell left of a known position, not wherever the
+	# push test happened to leave the player).
+	player.respawn_at(Vector2((sp.x + 0.5) * TILE, (sp.y + 0.5) * TILE))
+	await _t11_wait(0.4)
 	var pot := _spawn_test_prop("pot", player.cell() + Vector2i(-1, 0))
 	await _t11_wait(0.3)
 	var wood0: int = inv["wood"] + inv["coal"] + inv["gold"] + torches_held
 	player.attack_cooldown = 0.0
-	player.try_attack_dir(Vector2(-1, 0))
-	await _t11_wait(0.5)
-	print("DEEPFALL_P11 pot_broken=%s loot_delta=%d (expect true, 1)" % [str(not is_instance_valid(pot)), inv["wood"] + inv["coal"] + inv["gold"] + torches_held - wood0])
+	# W1 2026-11-12: a mage must aim slightly DOWN at a floor pot. A
+	# level orb leaves the player at standing_y-10 and passes 4 px
+	# over the pot's grown hit rect (pot centre floor_top-20, grown
+	# top floor_top-46, orb at floor_top-50) — the beta mage run's
+	# pot_broken=false was a geometric miss, not a timing one. A
+	# player aiming at a floor pot angles down the same way; the
+	# melee classes keep the level swing, which already connects.
+	if p11_class == "mage":
+		player.try_attack_dir(Vector2(-1, 0.25))
+	else:
+		player.try_attack_dir(Vector2(-1, 0))
+	# W1 2026-11-12: same orb-timing issue as the sword check — a
+	# mage's orb needs ~0.2 s to reach the pot 1 cell away (pot hp 1,
+	# orb dmg 12, so one hit breaks it). Poll up to 1 s for mage;
+	# tech/red keep the 0.5 s settle.
+	var pot_wait := 0.0
+	if p11_class == "mage":
+		# Phase 8 pattern, as in the sword check: step the orb in
+		# 0.05 s increments so a low-fps frame cannot tunnel past
+		# the pot's 52 px hit rect.
+		for k in range(20):
+			if _orbs.is_empty() or not is_instance_valid(pot) or bool(pot.get("broken")):
+				break
+			_update_orbs(0.05)
+		while pot_wait < 1.0 and is_instance_valid(pot) and not bool(pot.get("broken")) and inv["wood"] + inv["coal"] + inv["gold"] + torches_held - wood0 == 0:
+			await _t11_wait(0.1)
+			pot_wait += 0.1
+	else:
+		await _t11_wait(0.5)
+	# A broken pot is queue_free'd, which only takes effect at the
+	# next frame end — at ~5 fps the node can still test valid a
+	# full 0.1 s after it broke (the xvfb run showed pot_broken=false
+	# with loot_delta=1). Read the broken flag, not just validity.
+	await get_tree().physics_frame
+	var pot_gone: bool = not is_instance_valid(pot)
+	if is_instance_valid(pot):
+		pot_gone = bool(pot.get("broken"))
+	print("DEEPFALL_P11 pot_broken=%s loot_delta=%d pot_wait=%.1f (expect true, 1)" % [str(pot_gone), inv["wood"] + inv["coal"] + inv["gold"] + torches_held - wood0, pot_wait])
 	# 7. DASH and SLAM buttons
 	var db: Control = tu.get_node("DashButton")
 	var dx0: float = player.position.x
 	_t11_touch(5, db.position + db.size * 0.5, true)
-	await _t11_wait(0.12)
+	# W1: hold 0.4 s, not 0.12 s. At xvfb's ~5 fps a 0.12 s hold is
+	# shorter than one frame, and the press was swallowed whole in
+	# one mage run (dx=0.0, cooldown=0.00 — try_dash never ran).
+	# Holding past a frame boundary makes the press land. The dash
+	# itself (0.16 s) is unchanged; the button fires on press.
+	await _t11_wait(0.4)
 	_t11_touch(5, db.position + db.size * 0.5, false)
 	print("DEEPFALL_P11 dash dx=%.1f cooldown=%.2f (expect |dx|>50, >0)" % [absf(player.position.x - dx0), player.dash_cooldown])
 	await _t11_wait(0.6)
-	_spawn_one("miner-ghoul", player.cell() + Vector2i(2, 0))
+	# Phase 14 fix: deterministic slam setup. The old version tapped
+	# SLAM wherever the dash had left the player (mid-air, drifting)
+	# with the ghoul 2 cells away; the ghoul wandered and the landing
+	# point drifted, so the gap reached 192 px — outside the 170 px
+	# impact radius. Respawn on the solid spawn floor, settle, spawn
+	# the ghoul 1 cell away, tap at once.
+	player.respawn_at(Vector2((sp.x + 0.5) * TILE, (sp.y + 0.5) * TILE))
+	await _t11_wait(0.6)
+	_spawn_one("miner-ghoul", player.cell() + Vector2i(1, 0))
 	var g2: Node2D = enemies[enemies.size() - 1]
-	await _t11_wait(0.3)
 	var g2hp: int = g2.hp
 	var slb: Control = tu.get_node("SlamButton")
 	_t11_touch(6, slb.position + slb.size * 0.5, true)
 	_t11_touch(6, slb.position + slb.size * 0.5, false)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
 	await _t11_wait(0.5)
 	await _t11_shot("slam")
 	print("DEEPFALL_P11 slam ghoul_hp %d->%d (expect lower)" % [g2hp, g2.hp if is_instance_valid(g2) else -1])
@@ -4308,6 +6530,620 @@ func _run_selftest_p11() -> void:
 	await _t11_shot("lefthand")
 	tu._reset_settings()
 	print("DEEPFALL_P12 reset stick_r=%.1f (expect 72)" % tu._stick_r)
+	# --- Phase 14: the JUMP button must work through the REAL event
+	# path at phone geometry. The engine converts screen pixels to
+	# canvas units before _input (verified by probe), so _t11_touch
+	# takes canvas coords and converts to screen — the round trip
+	# (canvas -> screen -> engine -> canvas) is what a real finger
+	# does. The old selftest fed canvas coords straight through
+	# parse_input_event, which the engine then divided by 1.5x, so
+	# every button tap missed at phone geometry while the sticks
+	# (which spawn at the touch point) still felt fine — exactly the
+	# symptom Skit reported. This check feeds the button centre in
+	# canvas coords via _t11_touch and asserts the jump fires. Run
+	# the suite with --resolution 2400x1080 to exercise the real 1.5x
+	# case; at the default 1280x720 the transform is 1:1 and the
+	# check still validates the event path.
+	var _vp := get_viewport()
+	var _st: Transform2D = _vp.get_screen_transform()
+	var _jb2: Control = tu.get_node("JumpButton")
+	var _jc_canvas: Vector2 = _jb2.position + _jb2.size * 0.5
+	var _sp14: Vector2i = data["spawn"]
+	player.respawn_at(Vector2((_sp14.x + 0.5) * TILE, (_sp14.y + 0.5) * TILE))
+	await _t11_wait(0.6)
+	var _y14: float = player.position.y
+	player.touch_jump = false
+	_t11_touch(21, _jc_canvas, true)
+	await _t11_wait(0.2)
+	print("DEEPFALL_P14 real_touch_jump screen_scale=%.2f touch_jump=%s rose=%.1f (expect 1.50 at phone res, true, >30)" % [_st.get_scale().x, str(player.touch_jump), _y14 - player.position.y])
+	_t11_touch(21, _jc_canvas, false)
+	print("DEEPFALL_P14 done")
+
+
+# --- Chunk 1 targeted sighting: skeleton-warrior kill + chest break.
+# Test-only: --selftest-chunk1. The P11 suite fights test-spawned
+# foes and never meets a table-spawned warrior or a chest, so this
+# mode teleports the player to the real table entries and kills /
+# breaks them through the real combat path (player_attack_hit ->
+# take_hit -> _die -> ENEMY_SLAIN / prop_broken -> PROP_BROKEN).
+func _run_selftest_chunk1() -> void:
+	if _card_open:
+		_close_run_card()
+	_respawn_timer = 0.0
+	_card_pending = 0.0
+	_card_reason = ""
+	player.dead = false
+	DirAccess.remove_absolute(SAVE_PATH)
+	await _rebuild_world(false)
+	player.set_class("tech")
+	set_tool("sword")
+	_cards_enabled = false
+	# Table audit: slug counts, prop kind counts, first cell per new slug.
+	var slug_counts := {}
+	var target_cells := {}
+	for s in _enemy_spawns:
+		slug_counts[s["slug"]] = int(slug_counts.get(s["slug"], 0)) + 1
+		if s["slug"] in ["skeleton-warrior", "grave-revenant", "ash-wraith", "skeleton-rogue"] and not target_cells.has(s["slug"]):
+			target_cells[s["slug"]] = s["cell"]
+	var wcell: Vector2i = target_cells.get("skeleton-warrior", Vector2i(-1, -1))
+	var prop_counts := {}
+	var chest_pr: Node2D = null
+	for pr in phys_props:
+		prop_counts[pr.kind] = int(prop_counts.get(pr.kind, 0)) + 1
+		if pr.kind == "chest" and chest_pr == null:
+			chest_pr = pr
+	print("DEEPFALL_CHUNK1_TABLE spawns=%d slugs=%s props=%s warrior_cell=%s chest=%s" % [_enemy_spawns.size(), str(slug_counts), str(prop_counts), str(wcell), str(chest_pr != null)])
+	var warrior_ok := false
+	var chest_ok := false
+	var enemies_ok := {}
+	# Sight + slay one of each new Chunk 1 enemy through the real
+	# combat path (teleport onto its floor so the chunk activates,
+	# then swing until DEEPFALL_ENEMY_SLAIN fires).
+	for slug in ["skeleton-warrior", "grave-revenant", "ash-wraith", "skeleton-rogue"]:
+		var cell: Vector2i = target_cells.get(slug, Vector2i(-1, -1))
+		enemies_ok[slug] = false
+		if cell == Vector2i(-1, -1):
+			print("DEEPFALL_CHUNK1_ENEMY slug=%s live=false (no table spawn)" % slug)
+			continue
+		player.respawn_at(Vector2((cell.x + 0.5) * TILE, (cell.y + 1) * TILE - player.half_h))
+		await _t11_wait(1.0)
+		var w: Node2D = null
+		for e in enemies:
+			if is_instance_valid(e) and e.slug == slug:
+				w = e
+				break
+		if w != null:
+			print("DEEPFALL_CHUNK1_ENEMY slug=%s live hp=%d pos=%s" % [slug, w.hp, str(w.position)])
+			var guard := 0
+			while is_instance_valid(w) and not w.dead and guard < 40:
+				guard += 1
+				player.hurt_timer = 5.0
+				player.hp = player.max_hp
+				player.position = w.position + Vector2(-70, 0)
+				player.facing = 1
+				player_attack_hit(player.position, 1)
+				await _t11_wait(0.3)
+			enemies_ok[slug] = not is_instance_valid(w) or w.dead
+			print("DEEPFALL_CHUNK1_ENEMY slug=%s slain=%s guard=%d" % [slug, str(enemies_ok[slug]), guard])
+		else:
+			print("DEEPFALL_CHUNK1_ENEMY slug=%s live=false (chunk did not activate)" % slug)
+	warrior_ok = bool(enemies_ok.get("skeleton-warrior", false))
+	if chest_pr != null and is_instance_valid(chest_pr):
+		player.respawn_at(Vector2(chest_pr.position.x - 80.0, chest_pr.position.y + chest_pr.half.y - player.half_h))
+		await _t11_wait(0.6)
+		player.hurt_timer = 5.0
+		player.hp = player.max_hp
+		player.facing = 1
+		player_attack_hit(player.position, 1)
+		await _t11_wait(0.3)
+		# prop_broken() queue_frees the prop, so a freed instance
+		# means the break landed; never touch .broken after that.
+		chest_ok = not is_instance_valid(chest_pr)
+		print("DEEPFALL_CHUNK1_CHEST broken=%s" % str(chest_ok))
+	# Chunk 1 props: break one of each newly wired kind (+ barrel,
+	# wired since Phase 11 but never sighted broken) through the
+	# same swing path. Column takes 3 hits; the rest take 1.
+	for want_kind in ["candle", "banner", "column", "coins", "barrel"]:
+		var target: Node2D = null
+		for pr in phys_props:
+			if pr.kind == want_kind and is_instance_valid(pr):
+				target = pr
+				break
+		if target == null:
+			print("DEEPFALL_CHUNK1_PROP kind=%s broken=NOT_SPAWNED" % want_kind)
+			continue
+		player.respawn_at(Vector2(target.position.x - 80.0, target.position.y + target.half.y - player.half_h))
+		await _t11_wait(0.6)
+		player.hurt_timer = 5.0
+		player.hp = player.max_hp
+		player.facing = 1
+		var pguard := 0
+		while is_instance_valid(target) and pguard < 10:
+			pguard += 1
+			# Pushable props (barrel: friction 1.6) roll away from the
+			# hit impulse, so a fixed-position swinger whiffs after
+			# hit 1. A real player chases; the test does the same.
+			if target.pushable:
+				player.respawn_at(Vector2(target.position.x - 80.0, target.position.y + target.half.y - player.half_h))
+				player.facing = 1
+				await _t11_wait(0.15)
+			player_attack_hit(player.position, 1)
+			await _t11_wait(0.3)
+		print("DEEPFALL_CHUNK1_PROP kind=%s broken=%s guard=%d" % [want_kind, str(not is_instance_valid(target)), pguard])
+	# Chunk 1 respawn check: the warrior slain above armed a 60 s
+	# timer; force it due (white-box: the 60 s constant is reviewed,
+	# the sweep/guard/refresh path is what needs exercising), move
+	# the player far from the cell, and confirm the id leaves
+	# _slain_ids via the production sweep in _process.
+	var respawn_ok := false
+	var respawn_armed := false
+	if wcell != Vector2i(-1, -1):
+		var wid := -1
+		for s in _enemy_spawns:
+			if s["slug"] == "skeleton-warrior":
+				wid = int(s["id"])
+				break
+		if wid >= 0 and _respawn_at.has(wid):
+			respawn_armed = true
+			_respawn_at[wid] = _run_time - 1.0
+			player.respawn_at(Vector2(64, 64))
+			await _t11_wait(1.5)
+			respawn_ok = not _slain_ids.has(wid)
+		print("DEEPFALL_CHUNK1_RESPAWN warrior_id=%d armed=%s respawned=%s" % [wid, str(respawn_armed), str(respawn_ok)])
+	print("DEEPFALL_CHUNK1_DONE warrior=%s chest=%s enemies=%s respawn=%s" % [str(warrior_ok), str(chest_ok), str(enemies_ok), str(respawn_ok)])
+
+
+# --- Beta soak: a dumb autopilot plays for N minutes through the REAL
+# touch path (floating sticks + buttons), hunting for runtime errors,
+# FPS collapses, stuck spots, and enemy behaviour over time. Test-only:
+# --soak [--soak-secs=N] [--class=<id>]. The run card stays enabled so
+# death + respawn are exercised too. Nothing here ships to players. ---
+
+func _run_soak(duration: float) -> void:
+	DirAccess.remove_absolute(SAVE_PATH)
+	await _rebuild_world(false)
+	var soak_class := "tech"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--class="):
+			soak_class = a.trim_prefix("--class=")
+	player.set_class(soak_class)
+	set_tool("pickaxe")
+	var tu: Node = get_node("TouchUI")
+	var vs: Vector2 = get_viewport().get_visible_rect().size
+	var rng := RandomNumberGenerator.new()
+	rng.seed = run_seed + 1
+	var move_anchor := Vector2(300, 420)
+	var aim_anchor := Vector2(vs.x * 0.7, 300)
+	var aim_cur := aim_anchor
+	var jb: Control = tu.get_node("JumpButton")
+	var jc: Vector2 = jb.position + jb.size * 0.5
+	# Hold the move stick once; steer by dragging it.
+	_t11_touch(0, move_anchor, true)
+	var dir := 1.0
+	_t11_drag(0, move_anchor + Vector2(80 * dir, 0))
+	var aim_held := false
+	var jump_up_t := -1.0
+	var t := 0.0
+	var tick := 0.5
+	var last_pos: Vector2 = player.position
+	var last_move_t := 0.0
+	var stuck_events := 0
+	var deaths := 0
+	var kills0: int = kills
+	var mined0: int = _mined_cells.size()
+	var fps_min := 999.0
+	var fps_sum := 0.0
+	var fps_n := 0
+	var next_dir_t := 0.0
+	var next_torch_t := 20.0
+	var unstick_until := -1.0
+	var climbing := false  # W3: ledge-climb state (landing-synced zigzag hops, no mining)
+	var climb_last_gain_t := 0.0  # W3 fix 2: last time THIS climb gained a row
+	var climb_best_row := 0  # W3 fix 2: best (min) row of this climb
+	var climb_enter_row := 0  # W3 fix 3: row where this climb started
+	var climb_leg_x := -1  # W3 fix 3: shaft column (leg bx) of this climb, -1 if none
+	# W1: rooms visited (room rects are [rx, ry, rw, rh] in
+	# data["rooms"]) — the old soak camped one deep room for 150 s
+	# with no way to tell from SOAK_DONE alone.
+	var visited_rooms := {}
+	# W2: foes=0 time (no live enemy in the active chunk window) and
+	# longest unbroken foes=0 stretch, plus time with no foe inside
+	# the bot's 280 px encounter radius (near0). All in game seconds.
+	var foes0_s := 0.0
+	var foes0_cur := 0.0
+	var foes0_max := 0.0
+	var near0_s := 0.0
+	# W3: climb metric — deepest row reached, and the most rows ever
+	# climbed back up from that deepest point (the wave's gate is
+	# climb >= 10). The pre-W3 bot never climbed at all: it fell to
+	# rows 79-83 in the first 10 s and camped the pit (W1 soak:
+	# stuck 6, rooms 3, all on the fall path).
+	var deep_row := 0
+	var climb_rows := 0
+	while t < duration:
+		await _t11_wait(tick)
+		t += tick
+		# Release a held JUMP tap.
+		if jump_up_t > 0.0 and t >= jump_up_t:
+			_t11_touch(1, jc, false)
+			jump_up_t = -1.0
+		# Death: the run card opens and pauses the tree. Close it to
+		# respawn and keep playing; each close is one death.
+		if _card_open:
+			deaths += 1
+			print("SOAK_DEATH t=%.0f deaths=%d" % [t, deaths])
+			_close_run_card()
+			await _t11_wait(0.5)
+			t += 0.5
+			last_pos = player.position
+			last_move_t = t
+			continue
+		var fps: float = Engine.get_frames_per_second()
+		if fps > 0.0:
+			fps_min = minf(fps_min, fps)
+			fps_sum += fps
+			fps_n += 1
+		# W2: accumulate foes=0 time this tick.
+		if enemies.is_empty():
+			foes0_s += tick
+			foes0_cur += tick
+			foes0_max = maxf(foes0_max, foes0_cur)
+		else:
+			foes0_cur = 0.0
+		# Stuck: barely moved in 4 s while the stick is held.
+		if player.position.distance_to(last_pos) > 12.0:
+			last_pos = player.position
+			last_move_t = t
+		elif t - last_move_t > 4.0:
+			stuck_events += 1
+			print("SOAK_STUCK t=%.0f pos=%s dir=%.0f" % [t, str(player.cell()), dir])
+			# W3: standing on a one-way platform — a climb ledge? Hop
+			# up the ledges instead of mining: zigzag, flip direction
+			# on every hop, no pick. (The W1 mine-up unstick carved
+			# 28 cells in the first W3 soak and went nowhere in the
+			# shafts — the bot fought the ledges instead of using them.)
+			var _spc: Vector2i = player.cell()
+			var _on_ledge := false
+			for _dy in [1, 2]:
+				var _by: int = _spc.y + _dy
+				if _spc.x >= 0 and _spc.x < DeepfallMapGen.W and _by >= 0 and _by < DeepfallMapGen.H and fg[_by][_spc.x] == 7:
+					_on_ledge = true
+					break
+			if _on_ledge:
+				print("SOAK_CLIMB_MODE t=%.0f pos=%s" % [t, str(_spc)])
+				dir = -dir
+				_t11_drag(0, move_anchor + Vector2(80 * dir, 0))
+				_t11_touch(1, jc, true)
+				jump_up_t = t + 0.5
+				climbing = true
+				climb_best_row = player.cell().y
+				climb_last_gain_t = t
+				climb_enter_row = player.cell().y
+				# W3 fix 3: which shaft is this ledge in? (For the
+				# position-before-climb steering — the probe proved a
+				# blind flip drifts out of the shaft in the room
+				# portion.) -1 = no leg here (room platform).
+				climb_leg_x = -1
+				for _leg in data.get("legs", []):
+					if _spc.x >= int(_leg[0]) and _spc.x <= int(_leg[0]) + 2 and _spc.y >= int(_leg[1]) and _spc.y <= int(_leg[2]):
+						climb_leg_x = int(_leg[0])
+						break
+				last_move_t = t
+				last_pos = player.position
+			else:
+				# W1 2026-11-12: mine UPWARD while hopping, not forward-down.
+				# The old unstick mined the block ahead-down, which never
+				# gets a bot out of a 35-row pit — it just shuffled around
+				# the same floor. Aim up-forward and keep jumping for
+				# 2.5 s so the pick carves a stairway out of the pit.
+				# W1 fix 2: the steep up-forward ray (60,-80) finds only
+				# air from the pit floor — the room is ~7 rows tall and
+				# its ceiling is beyond REACH, so probe=(-1,-1) and the
+				# pick never bit (mined=0 across 7 unsticks). Aim a
+				# SHALLOW diagonal at the NEAREST wall instead: the wall
+				# is 1-2 cells away, so the ray hits rock and the pick
+				# carves a stairway up through the wall as the bot jumps.
+				var _pl := _aim_probe(Vector2(-1, -0.45).normalized())
+				var _pr := _aim_probe(Vector2(1, -0.45).normalized())
+				dir = -dir
+				if _pl["cell"] != Vector2i(-1, -1) and _pr["cell"] == Vector2i(-1, -1):
+					dir = -1.0
+				elif _pr["cell"] != Vector2i(-1, -1) and _pl["cell"] == Vector2i(-1, -1):
+					dir = 1.0
+				# If both or neither hit, keep the flipped walk dir: the
+				# bot walks to a wall during the window and the ray will
+				# find rock once it is adjacent.
+				_t11_drag(0, move_anchor + Vector2(80 * dir, 0))
+				_t11_touch(1, jc, true)
+				jump_up_t = t + 0.5
+				set_tool("pickaxe")
+				# W1: shallow diagonal at the probed near wall. (The steep
+				# 53-degree variant was tried and mines less, 3 vs 5 in
+				# 90 s, and climbs no better — the holes it opens are
+				# diagonal and out of step-range. The shallow ray bites
+				# the wall at body height and the pick keeps working.)
+				aim_cur = aim_anchor + Vector2(80 * dir, -36)
+				_t11_touch(2, aim_anchor, true)
+				_t11_drag(2, aim_cur)
+				aim_held = true
+				unstick_until = t + 2.5
+				last_move_t = t
+				last_pos = player.position
+		# W1: while the unstick climb runs, keep hopping — one jump
+		# only reaches ~1.7 tiles, so re-press whenever the last hop
+		# was released and the climb window is still open.
+		if aim_held and unstick_until > 0.0 and t < unstick_until and jump_up_t < 0.0:
+			_t11_touch(1, jc, true)
+			jump_up_t = t + 0.5
+		# Release the unstick mine after its second.
+		if aim_held and unstick_until > 0.0 and t >= unstick_until:
+			_t11_touch(2, aim_cur, false)
+			aim_held = false
+			unstick_until = -1.0
+		# W3 fix 3: position before climbing, gentle stick. The
+		# probe proved a full +/-80 drag (270 px/s, ~5.5 tiles per
+		# jump) overshoots the 3-wide shaft and drops the bot into
+		# the room; +/-24 px (~1.4 tiles per jump) ratchets the
+		# ledges 1 row per hop (probe: 10 rows in 10 s). Outside the
+		# shaft, walk back to it (full stick, no jump); inside it,
+		# zigzag up. No leg found (room platform): plain gentle zigzag.
+		if climbing and player.on_ground and jump_up_t < 0.0:
+			var _cpc2: Vector2i = player.cell()
+			var _in_shaft2 := climb_leg_x >= 0 and _cpc2.x >= climb_leg_x and _cpc2.x <= climb_leg_x + 2
+			if _in_shaft2:
+				var _scx: float = (climb_leg_x + 1.5) * TILE
+				if absf(player.position.x - _scx) > 32.0:
+					dir = 1.0 if player.position.x < _scx else -1.0
+				else:
+					dir = -dir
+				_t11_drag(0, move_anchor + Vector2(24 * dir, 0))
+				_t11_touch(1, jc, true)
+				jump_up_t = t + 0.5
+			elif climb_leg_x >= 0:
+				var _scx2: float = (climb_leg_x + 1.5) * TILE
+				dir = 1.0 if player.position.x < _scx2 else -1.0
+				_t11_drag(0, move_anchor + Vector2(80 * dir, 0))
+			else:
+				dir = -dir
+				_t11_drag(0, move_anchor + Vector2(24 * dir, 0))
+				_t11_touch(1, jc, true)
+				jump_up_t = t + 0.5
+		# W3 fix 2: stop climbing once the bot stands on solid ground
+		# again (room/corridor floor) — it has left the shaft. A
+		# platform below means it is still on a ledge.
+		if climbing and player.on_ground:
+			var _cpc: Vector2i = player.cell()
+			var _on_solid := false
+			var _on_ledge_now := false
+			for _dy in [1, 2]:
+				var _cy: int = _cpc.y + _dy
+				if _cpc.x >= 0 and _cpc.x < DeepfallMapGen.W and _cy >= 0 and _cy < DeepfallMapGen.H:
+					var _ct: int = fg[_cy][_cpc.x]
+					if _ct == 7:
+						_on_ledge_now = true
+					elif _ct != 0:
+						_on_solid = true
+			# Only once it has actually climbed (>= 3 rows): a bot
+			# repositioning on the floor at the bottom must not exit
+			# climb mode before it has even started.
+			if _on_solid and not _on_ledge_now and climb_enter_row - climb_best_row >= 3:
+				climbing = false
+				print("SOAK_CLIMB_END t=%.0f pos=%s climb=%d" % [t, str(_cpc), climb_rows])
+		# W3 fix 2: stall exit — if the bot has not gained a row in
+		# 5 s of climbing it is hopping in place on one ledge (soak 4
+		# latched 160 s at (25,44) this way: no CLIMB_END, no stuck
+		# events, wander gated off). Exit and let wandering / mining
+		# take over instead of trapping the bot forever.
+		if climbing and t - climb_last_gain_t > 5.0:
+			climbing = false
+			print("SOAK_CLIMB_STALL t=%.0f pos=%s climb=%d" % [t, str(player.cell()), climb_rows])
+		# Nearest live enemy within 280 px: sword + aim at it.
+		var foe: Node2D = null
+		var foe_d := 280.0
+		for e in enemies:
+			if not is_instance_valid(e):
+				continue
+			var d: float = e.position.distance_to(player.position)
+			if d < foe_d:
+				foe_d = d
+				foe = e
+		if foe != null and not aim_held:
+			set_tool("sword")
+			var ad: Vector2 = (foe.position - player.position).normalized()
+			aim_cur = aim_anchor + ad * 80.0
+			_t11_touch(2, aim_anchor, true)
+			_t11_drag(2, aim_cur)
+			aim_held = true
+		elif foe == null and aim_held and unstick_until < 0.0:
+			_t11_touch(2, aim_cur, false)
+			aim_held = false
+			set_tool("pickaxe")
+		# W2: no foe inside the 280 px encounter radius this tick.
+		if foe == null:
+			near0_s += tick
+		# Wander: new random direction every 2-4 s. (Not while the
+		# W3 ledge-climb runs — it owns the walk direction.)
+		if not climbing and t >= next_dir_t:
+			dir = -1.0 if rng.randf() < 0.5 else 1.0
+			_t11_drag(0, move_anchor + Vector2(80 * dir, 0))
+			next_dir_t = t + rng.randf_range(2.0, 4.0)
+			# Random hop now and then.
+			if rng.randf() < 0.35 and jump_up_t < 0.0:
+				_t11_touch(1, jc, true)
+				jump_up_t = t + 0.5
+		# Torch now and then so the light path gets exercised.
+		if t >= next_torch_t:
+			_place_torch()
+			next_torch_t = t + rng.randf_range(18.0, 28.0)
+		# W1: track which room the bot is in (first match wins; rooms
+		# do not overlap). Corridors belong to no room and record
+		# nothing.
+		var pc: Vector2i = player.cell()
+		# W3: climb metric — deepest row ever, most rows climbed back
+		# up from it (max over the run, so a later deeper fall cannot
+		# erase a climb already achieved).
+		if pc.y > deep_row:
+			deep_row = pc.y
+		var _climb: int = deep_row - pc.y
+		if _climb > climb_rows:
+			climb_rows = _climb
+			print("SOAK_CLIMB t=%.0f climb=%d deep=%d pos=%s" % [t, climb_rows, deep_row, str(pc)])
+		# W3 fix 2: per-climb progress — the global climb_rows is a
+		# max over the run, so a second climb cannot "gain" until it
+		# beats the first. Track the best row of THIS climb instead.
+		if climbing and pc.y < climb_best_row:
+			climb_best_row = pc.y
+			climb_last_gain_t = t
+		for ri in range(data["rooms"].size()):
+			var rr: Array = data["rooms"][ri]
+			if pc.x >= int(rr[0]) and pc.x < int(rr[0]) + int(rr[2]) and pc.y >= int(rr[1]) and pc.y < int(rr[1]) + int(rr[3]):
+				if not visited_rooms.has(ri):
+					visited_rooms[ri] = true
+					print("SOAK_ROOM t=%.0f room=%d pos=%s" % [t, ri, str(pc)])
+				break
+		if int(t) % 10 == 0 and int(t - tick) % 10 != 0:
+			print("SOAK_TICK t=%.0f pos=%s hp=%d foes=%d fps=%.0f kills=%d mined=%d" % [t, str(player.cell()), player.hp, enemies.size(), fps, kills, _mined_cells.size()])
+	# Release everything.
+	if aim_held:
+		_t11_touch(2, aim_cur, false)
+	_t11_touch(0, move_anchor + Vector2(80 * dir, 0), false)
+	if jump_up_t > 0.0:
+		_t11_touch(1, jc, false)
+	print("SOAK_DONE t=%.0f deaths=%d stuck=%d kills=%d mined=%d rooms=%d climb=%d deep=%d fps_min=%.0f fps_avg=%.0f foes0=%.0f foes0max=%.0f near0=%.0f" % [t, deaths, stuck_events, kills - kills0, _mined_cells.size() - mined0, visited_rooms.size(), climb_rows, deep_row, fps_min, fps_sum / maxi(fps_n, 1), foes0_s, foes0_max, near0_s])
+
+# --- W3: scripted climb probe — deterministic proof that the ledges
+# are climbable. The soak bot only sometimes falls deep (soak 4 never
+# left spawn), so a soak alone cannot prove the level. This teleports
+# the player to the bottom of the LONGEST deep shaft (leg bottom row
+# > 60) and drives it up with the same landing-synced zigzag the soak
+# uses, through the REAL touch path. Pass = 10 rows climbed, no
+# mining. Test-only; --climb-probe.
+func _run_climb_probe() -> void:
+	DirAccess.remove_absolute(SAVE_PATH)
+	await _rebuild_world(false)
+	player.set_class("tech")
+	set_tool("pickaxe")
+	var legs: Array = data.get("legs", [])
+	var best_leg: Array = []
+	var best_len := 0
+	for leg in legs:
+		var ltop: int = int(leg[1])
+		var lbot: int = int(leg[2])
+		if lbot <= 60:
+			continue
+		# The leg's bottom must be a room centre (a real climb path
+		# out of a room). Loop/repair legs can dangle: their bottom
+		# row is another room's centre row at a different x, so the
+		# shaft ends with no room floor below it — the first probe run
+		# picked such a leg ([22,18,73]), fell 5 rows to a floor that
+		# was not the shaft's, and "passed" by dying and respawning.
+		var has_b_room := false
+		for r in data["rooms"]:
+			if int(r[0]) + int(r[2]) / 2 == int(leg[0]) and int(r[1]) + int(r[3]) / 2 == lbot:
+				has_b_room = true
+				break
+		if not has_b_room:
+			continue
+		if lbot - ltop > best_len:
+			best_len = lbot - ltop
+			best_leg = leg
+	if best_leg.is_empty():
+		print("CLIMB_PROBE_FAIL reason=no-deep-leg")
+		return
+	var lbx: int = int(best_leg[0])
+	var ltop2: int = int(best_leg[1])
+	var lbot2: int = int(best_leg[2])
+	print("CLIMB_PROBE leg x=%d top=%d bot=%d len=%d" % [lbx, ltop2, lbot2, best_len])
+	# Feet one row above the lowest ledge (row lbot+2): the player
+	# falls onto it and stands there. Starting on the room floor
+		# below would test the floor-to-ledge hop, not the shaft — the
+		# --dump-map analysis shows that gap is 0-2 rows
+		# (double-jumpable) for every deep leg with a B room.
+	# respawn_at also resets velocity/HP.
+	player.respawn_at(Vector2((lbx + 1.5) * TILE, (lbot2 + 1) * TILE - player.half_h))
+	var tu: Node = get_node("TouchUI")
+	var jb: Control = tu.get_node("JumpButton")
+	var jc: Vector2 = jb.position + jb.size * 0.5
+	var move_anchor := Vector2(300, 420)
+	# Hold the move stick CENTRED (no steering) while settling: the
+	# first probe run dragged it right during the settle and the
+	# player drifted out of the 3-wide shaft before landing. Wait
+	# for the actual landing — at ~5 fps the physics runs far slower
+	# than real time, so a fixed 1.0 s settle is not a landing.
+	_t11_touch(0, move_anchor, true)
+	var _settle := 0.0
+	while not player.on_ground and _settle < 5.0:
+		await _t11_wait(0.5)
+		_settle += 0.5
+	var dir := 1.0
+	var jump_up_t := -1.0
+	var t := 0.0
+	var tick := 0.5
+	var deaths0: int = _deaths
+	var start_row: int = player.cell().y
+	var best_row := start_row
+	print("CLIMB_PROBE start row=%d pos=%s settle=%.1f" % [start_row, str(player.cell()), _settle])
+	while t < 30.0:
+		await _t11_wait(tick)
+		t += tick
+		if jump_up_t > 0.0 and t >= jump_up_t:
+			_t11_touch(1, jc, false)
+			jump_up_t = -1.0
+		if _card_open:
+			_close_run_card()
+			await _t11_wait(0.5)
+			t += 0.5
+			continue
+		# A death auto-respawns at spawn with cards disabled — that
+		# teleport is not a climb. Bail as FAIL the moment it happens.
+		if _deaths != deaths0:
+			print("CLIMB_PROBE_FAIL reason=died start=%d best=%d climbed=%d" % [start_row, best_row, start_row - best_row])
+			_t11_touch(0, move_anchor + Vector2(80 * dir, 0), false)
+			if jump_up_t > 0.0:
+				_t11_touch(1, jc, false)
+			return
+		# Position first, climb second. Outside the 3-wide shaft,
+		# walk (no jump) toward its centre; inside it, zigzag up the
+		# alternating ledges. A blind flip drifts the player into the
+		# room, where there are no ledges — probe 4 ping-ponged
+		# x=111<->114 at row 71 for 29 s. The shaft's lower rows open
+		# into the room, so there is no wall to stop the drift.
+		var pc: Vector2i = player.cell()
+		var shaft_cx: float = (lbx + 1.5) * TILE
+		var in_shaft: bool = pc.x >= lbx and pc.x <= lbx + 2
+		if player.on_ground and jump_up_t < 0.0:
+			if in_shaft:
+				if absf(player.position.x - shaft_cx) > 32.0:
+					dir = 1.0 if player.position.x < shaft_cx else -1.0
+				else:
+					dir = -dir
+				# Gentle stick for the hop (probe 5): a full +/-80 drag
+				# runs at 270 px/s, ~5.5 tiles per jump — it overshoots
+				# the 3-wide shaft and lands in the room. +/-24 px is
+				# touch_move ~0.25 (RADIUS 72, DEAD 0.18), ~1.4 tiles per
+				# jump: enough to step onto the next alternating ledge.
+				_t11_drag(0, move_anchor + Vector2(24 * dir, 0))
+				_t11_touch(1, jc, true)
+				jump_up_t = t + 0.5
+			else:
+				dir = 1.0 if player.position.x < shaft_cx else -1.0
+				_t11_drag(0, move_anchor + Vector2(80 * dir, 0))
+		if pc.y < best_row:
+			best_row = pc.y
+			print("CLIMB_PROBE t=%.0f row=%d climbed=%d" % [t, pc.y, start_row - best_row])
+		if start_row - best_row >= 10:
+			print("CLIMB_PROBE_PASS start=%d best=%d climbed=%d t=%.0f" % [start_row, best_row, start_row - best_row, t])
+			_t11_touch(0, move_anchor + Vector2(80 * dir, 0), false)
+			if jump_up_t > 0.0:
+				_t11_touch(1, jc, false)
+			return
+		if int(t) % 5 == 0 and int(t - tick) % 5 != 0:
+			print("CLIMB_PROBE_TICK t=%.0f pos=%s" % [t, str(pc)])
+	_t11_touch(0, move_anchor + Vector2(80 * dir, 0), false)
+	if jump_up_t > 0.0:
+		_t11_touch(1, jc, false)
+	print("CLIMB_PROBE_FAIL start=%d best=%d climbed=%d" % [start_row, best_row, start_row - best_row])
+
 
 
 # --- Phase 13: run summary card ---
@@ -4446,6 +7282,12 @@ func show_run_card(reason: String) -> void:
 		reason, _max_depth, kills, ore_collected, _mined_cells.size(), _props_smashed])
 
 func _share_card() -> void:
+	# Beta fix 2026-11-08: headless never draws a frame, so the
+	# frame_post_draw await below hangs forever. Same guard as _t11_shot.
+	# On a real device there is always a display server, so this is a
+	# no-op in production.
+	if DisplayServer.get_name() == "headless":
+		return
 	# Render just the card to a PNG (buttons hidden), save it on the
 	# device, and put the brag text on the clipboard to paste anywhere.
 	var panel: Control = _card.get_node("RunCard")
@@ -4498,6 +7340,15 @@ func _run_selftest_p13_pre() -> void:
 	print("DEEPFALL_P13 death_anim corpses=%d drops=%d inv_unchanged=%s (expect 1, 1, true)" % [corpses.size(), drops.size(), str(inv["coal"] + inv["stone"] == c0)])
 	await _t11_wait(0.25)
 	await _t11_shot("death")
+	# Phase 14: the drop bounces randomly, so whether it lands on the
+	# stationary player is luck (this check flapped 2/5 runs). Walk
+	# the player onto it instead — the collection itself (proximity
+	# pickup) is what is under test, not the bounce. Teleporting the
+	# player to the drop exercises the real pickup path.
+	var _drops2 := get_children().filter(func(n): return n.get_script() == LOOT_SCRIPT)
+	if not _drops2.is_empty() and is_instance_valid(_drops2[0]):
+		player.position = (_drops2[0] as Node2D).position
+		player.vel = Vector2.ZERO
 	await _t11_wait(1.6)
 	print("DEEPFALL_P13 loot_collected inv_delta=%d corpse_gone=%s (expect 1, true)" % [inv["coal"] + inv["stone"] - c0, str(get_children().filter(func(n): return n.get_script() == CORPSE_SCRIPT).is_empty())])
 	# 2. smashed prop persists through save + reload
@@ -4536,7 +7387,13 @@ func _run_selftest_p13_pre() -> void:
 	print("DEEPFALL_P13 card_open=%s paused=%s (expect true, true)" % [str(_card_open), str(get_tree().paused)])
 	await _t11_shot("card")
 	await _share_card()
-	print("DEEPFALL_P13 share clipboard_ok=%s file=%s" % [str(DisplayServer.clipboard_get().begins_with("DEEPFALL")), str(FileAccess.file_exists("user://deepfall_run_card.png"))])
+	if DisplayServer.get_name() == "headless":
+		# Beta fix 2026-11-08: _share_card returns early headless (no
+		# frame to capture), so there is nothing to assert here. The
+		# clipboard/file check still runs under xvfb.
+		print("DEEPFALL_P13 share skipped=headless (no frame to capture)")
+	else:
+		print("DEEPFALL_P13 share clipboard_ok=%s file=%s" % [str(DisplayServer.clipboard_get().begins_with("DEEPFALL")), str(FileAccess.file_exists("user://deepfall_run_card.png"))])
 	_close_run_card()
 	await _t11_wait(0.5)
 	print("DEEPFALL_P13 after_card dead=%s paused=%s (expect false, false)" % [str(player.dead), str(get_tree().paused)])

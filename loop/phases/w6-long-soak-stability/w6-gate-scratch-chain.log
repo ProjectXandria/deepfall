@@ -1,0 +1,21 @@
+sweep 34288107 rc=0 DEEPFALL_PHASE1_READY seed=34288107 rooms=40/40 ore_veins=104 spawn=(7, 70) exit=(191, 73) connected=true load_ms=1465
+sweep 71509382 rc=0 DEEPFALL_PHASE1_READY seed=71509382 rooms=40/40 ore_veins=118 spawn=(6, 83) exit=(192, 29) connected=true load_ms=1554
+sweep 10455829 rc=0 DEEPFALL_PHASE1_READY seed=10455829 rooms=40/40 ore_veins=94 spawn=(8, 66) exit=(184, 57) connected=true load_ms=1470
+sweep 88204713 rc=0 DEEPFALL_PHASE1_READY seed=88204713 rooms=40/40 ore_veins=139 spawn=(6, 70) exit=(192, 16) connected=true load_ms=1935
+sweep 29063451 rc=0 DEEPFALL_PHASE1_READY seed=29063451 rooms=40/40 ore_veins=103 spawn=(8, 23) exit=(189, 65) connected=true load_ms=1130
+=== selftest ===
+selftest rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1390
+=== selftest-load ===
+selftest-load rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=2483
+=== p11-tech ===
+p11-tech rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1202
+=== p11-red ===
+p11-red rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=1970
+=== p11-mage ===
+p11-mage rc=0 errors=0 passfalse=0 -> OK
+DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true load_ms=2023
+GATE CHAIN DONE 2026-11-14T03:11:33Z

@@ -1,0 +1,10 @@
+selftest: timeout_rc=0 script_errors=0 touch_jump_ok=1
+DEEPFALL_P11 slam ghoul_hp 20->10 (expect lower)
+DEEPFALL_P11 done hp=100 props=65
+DEEPFALL_P14 real_touch_jump screen_scale=1.50 touch_jump=true rose=110.7 (expect 1.50 at phone res, true, >30)
+DEEPFALL_P14 done
+-rw-rw---- 1 root root 94725129 Nov  6 22:17 exports/deepfall-phase1-debug.apk
+c2ada4e07a386c44d0031bafe0c3286dc7c6c213a4a6d26603e831fe67e7f39f  exports/deepfall-phase1-debug.apk
+package: name='com.dogbyte.deepfall' versionCode='2' versionName='1.1' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+apksigner: PASS
+CHAIN_DONE

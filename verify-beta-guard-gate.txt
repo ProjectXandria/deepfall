@@ -1,0 +1,12 @@
+guard verify started Sun Nov  8 21:11:38 PST 2026
+headless rc=0
+xvfb rc=0
+== verify-beta-headless-p11.log script_errors=0 ==
+DEEPFALL_P13 share skipped=headless (no frame to capture)
+DEEPFALL_P11 done hp=100 props=65
+DEEPFALL_P14 done
+== verify-beta-xvfb-p11.log script_errors=0 ==
+DEEPFALL_P13 share clipboard_ok=true file=true
+DEEPFALL_P11 done hp=100 props=65
+DEEPFALL_P14 done
+GUARD_CHAIN_DONE
