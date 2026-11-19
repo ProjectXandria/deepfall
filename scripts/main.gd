@@ -49,7 +49,15 @@ var torches: Dictionary = {}
 # crafted-item counts (glass, lantern, workbench); torches stay in the
 # legacy torches_held var. Wood-platform (id 7) is never mined, so it
 # never gives wood — only solid wood blocks (id 6) do.
-var inv: Dictionary = {"wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0}
+var inv: Dictionary = {"wood": 0, "stone": 0, "dirt": 0, "coal": 0, "gold": 0, "amber": 0, "sand": 0, "glass": 0, "lantern": 0, "workbench": 0,
+	# WazHack wave: food, coins, unidentified loot. Added to the literal
+	# (not created dynamically) so _rebuild_world zeroes them per run
+	# and _apply_save / save_game carry them with no SAVE_VERSION bump.
+	"meat": 0, "cooked_meat": 0, "bread": 0, "mushroom": 0, "mushroom_stew": 0, "royal_jelly": 0, "coins": 0,
+	"potion_cloudy": 0, "potion_swirly": 0, "potion_bubbly": 0, "potion_murky": 0, "potion_blue": 0, "potion_black": 0,
+	"wand_crooked": 0, "wand_ebony": 0, "wand_glass": 0, "wand_forked": 0,
+	"ring_agate": 0, "ring_twisted": 0, "ring_onyx": 0, "ring_tigereye": 0, "ring_control": 0,
+	"scroll_identify": 0, "scroll_curse": 0, "scroll_mapping": 0, "scroll_taming": 0}
 var lanterns: Dictionary = {}
 var workbenches: Dictionary = {}
 var _pending_lanterns: Array = []
@@ -75,6 +83,23 @@ const FX_SCRIPT := preload("res://scripts/fx.gd")
 const PROP_SCRIPT := preload("res://scripts/phys_prop.gd")
 const CORPSE_SCRIPT := preload("res://scripts/enemy_corpse.gd")
 const LOOT_SCRIPT := preload("res://scripts/loot_drop.gd")
+const WAZHACK_SCRIPT := preload("res://scripts/wazhack.gd")
+const PET_SCRIPT := preload("res://scripts/pet.gd")
+
+# WazHack wave: the systems module (scripts/wazhack.gd), the pet
+# follower node, and the feature/trap marker nodes it places.
+var wz = null
+var pet: Node2D = null
+var _wz_feature_nodes: Array = []
+var _wz_trap_markers: Dictionary = {}
+var _wz_panel: PanelContainer = null
+var _wz_panel_title: Label = null
+var _wz_panel_body: Label = null
+var _wz_panel_actions: VBoxContainer = null
+var _wz_panel_refresh = null
+var _hunger_bar: Control = null
+var _wz_items_box: VBoxContainer = null
+var _wz_interact_hint := ""
 # Phase 13: persistent props, run stats + summary card
 var _props_broken: Dictionary = {}
 var _props_moved: Dictionary = {}
@@ -309,6 +334,27 @@ class HeartBar extends Control:
 			c + Vector2(-7.0, -1.0) * s, c + Vector2(7.0, -1.0) * s,
 			c + Vector2(0.0, 7.5) * s]), col)
 
+# WazHack wave: hunger bar — amber fill under the hearts, red when
+# starving, yellow when hungry. Mirrors HeartBar (code-drawn, no font).
+class HungerBar extends Control:
+	var main_node: Node = null
+	func _draw() -> void:
+		if main_node == null:
+			return
+		var wz = main_node.get("wz")
+		if wz == null:
+			return
+		var h: float = clampf(float(wz.get("hunger")) / 100.0, 0.0, 1.0)
+		var w := size.x
+		draw_rect(Rect2(0, 0, w, size.y), Color(0.08, 0.06, 0.05, 0.9))
+		var col := Color(1.0, 0.65, 0.2, 1.0)
+		if h < 0.15:
+			col = Color(0.9, 0.15, 0.15, 1.0)
+		elif h < 0.35:
+			col = Color(1.0, 0.85, 0.25, 1.0)
+		draw_rect(Rect2(1, 1, (w - 2) * h, size.y - 2), col)
+		draw_rect(Rect2(0, 0, w, size.y), Color(0, 0, 0, 0.9), false, 1.0)
+
 func log_event(msg: String) -> void:
 	# Phase 10: the WazHack-style log line. Kept until replaced.
 	_log_msg = msg
@@ -399,6 +445,10 @@ func _ready() -> void:
 		else:
 			randomize()
 			run_seed = randi_range(10000000, 99999999)
+	# WazHack wave: the systems module is created before the first
+	# rebuild so _rebuild_world can roll traps/shops and restore saves.
+	wz = WAZHACK_SCRIPT.new()
+	wz.setup(self, inv, run_seed)
 	# Phase 14: show the loading screen FIRST and let it paint before
 	# the heavy work. _ready used to generate + render the whole world
 	# synchronously before the first frame, so the phone sat on a
@@ -502,6 +552,26 @@ func _ready() -> void:
 	add_child(_reticle)
 	_hearts.main_node = self
 	$HUD.add_child(_hearts)
+	# WazHack wave: hunger bar under the hearts + the generic feature
+	# panel (shops / altar / fountain / talents share one panel).
+	_hunger_bar = HungerBar.new()
+	_hunger_bar.name = "HungerBar"
+	_hunger_bar.offset_left = 16.0
+	_hunger_bar.offset_top = 68.0
+	_hunger_bar.offset_right = 216.0
+	_hunger_bar.offset_bottom = 80.0
+	_hunger_bar.main_node = self
+	$HUD.add_child(_hunger_bar)
+	var hung_lab := Label.new()
+	hung_lab.text = "HUNGER"
+	hung_lab.offset_left = 222.0
+	hung_lab.offset_top = 66.0
+	hung_lab.offset_right = 280.0
+	hung_lab.offset_bottom = 82.0
+	hung_lab.add_theme_font_size_override("font_size", 11)
+	hung_lab.add_theme_color_override("font_color", Color(1.0, 0.65, 0.2, 0.8))
+	$HUD.add_child(hung_lab)
+	_build_wazhack_panel()
 	_w4_prof_mark("ready_hud")
 	log_event("Tool: Pickaxe")
 	print("DEEPFALL_PHASE1_READY seed=%d rooms=%d/%d ore_veins=%d spawn=%s exit=%s connected=%s load_ms=%d" % [
@@ -513,7 +583,7 @@ func _ready() -> void:
 	# Playtest fix wave Phase 2: flag test/screenshot runs so the
 	# one-time drop hint never fires in them (see _process).
 	for a0 in args:
-		if a0.begins_with("--selftest") or a0.begins_with("--screenshot") or a0 in ["--soak", "--dump-layers", "--dump-map", "--climb-probe"]:
+		if a0.begins_with("--selftest") or a0.begins_with("--screenshot") or a0 in ["--soak", "--dump-layers", "--dump-map", "--dump-wazhack", "--climb-probe"]:
 			_test_mode = true
 	# Phase 8 class-select flow: a save skips the select (saved class
 	# was applied in _rebuild_world); a new run shows it. Headless
@@ -607,6 +677,11 @@ func _ready() -> void:
 		print("MAP_ROOMS %s" % str(data["rooms"]))
 		print("MAP_LEGS %s" % str(data.get("legs", [])))
 		print("MAP_SPAWN %s MAP_EXIT %s" % [str(data["spawn"]), str(data["exit"])])
+		get_tree().quit()
+		return
+	if "--dump-wazhack" in args:
+		_show_class_select(false)
+		_dump_wazhack()
 		get_tree().quit()
 		return
 	if "--screenshot-pair" in OS.get_cmdline_user_args():
@@ -826,6 +901,15 @@ func _ready() -> void:
 	elif "--screenshot-chunk2" in OS.get_cmdline_user_args():
 		await _run_screenshot_chunk2()
 		get_tree().quit()
+	elif "--screenshot-wazhack" in OS.get_cmdline_user_args():
+		_show_class_select(false)
+		await _run_screenshot_wazhack()
+		get_tree().quit()
+	elif "--selftest-wazhack" in OS.get_cmdline_user_args():
+		_show_class_select(false)
+		_cards_enabled = false
+		_run_selftest_wazhack()
+		get_tree().quit()
 	elif "--selftest" in OS.get_cmdline_user_args():
 		_run_selftest()
 	elif "--selftest-load" in OS.get_cmdline_user_args():
@@ -897,6 +981,10 @@ func _rebuild_world(use_save: bool, staged: bool = false) -> void:
 		var d := _load_save_dict()
 		if not d.is_empty():
 			_apply_save(d)
+	# WazHack wave: roll traps/shops (or restore them from the save
+	# _apply_save just loaded) now that rooms exist.
+	if wz != null:
+		wz.on_world_built(data["rooms"])
 	if not _tileset_built:
 		_build_tileset()
 		_w4_prof_mark("rebuild_tileset")
@@ -962,6 +1050,8 @@ func _rebuild_world(use_save: bool, staged: bool = false) -> void:
 	# active set is computed from the (0, 0) default position.
 	_apply_chunk_visibility(true)
 	_w4_prof_mark("rebuild_stream")
+	# WazHack wave: place shop/altar/fountain markers and the pup.
+	_wz_spawn_features()
 	if staged:
 		_w4_prof_mark("rebuild_pre_await3")
 		await get_tree().process_frame
@@ -1016,6 +1106,19 @@ func _clear_dynamic() -> void:
 	_crystal_cells.clear()
 	_chamber_gate = Vector2i(-1, -1)
 	_active_chunks.clear()
+	# WazHack wave: the pet + feature/trap markers are rebuild-scoped.
+	if pet != null and is_instance_valid(pet):
+		pet.free()
+	pet = null
+	for n in _wz_feature_nodes:
+		if is_instance_valid(n):
+			n.free()
+	_wz_feature_nodes.clear()
+	for key in _wz_trap_markers.keys():
+		var m: Node = _wz_trap_markers[key]
+		if is_instance_valid(m):
+			m.free()
+	_wz_trap_markers.clear()
 
 # --- Phase 6: save / load / new run ---
 
@@ -1123,6 +1226,10 @@ func _apply_save(d: Dictionary) -> void:
 	tool = String(d.get("tool", "pickaxe"))
 	if tool not in ["pickaxe", "sword"]:
 		tool = "pickaxe"
+	# WazHack wave: additive optional field — old v9 saves have no
+	# "wazhack" key and load with fresh defaults; SAVE_VERSION stays 9.
+	if wz != null:
+		wz.from_save(d.get("wazhack", {}))
 	_has_save = true
 	print("DEEPFALL_SAVE_LOADED mined=%d cracked=%d torches=%d slain=%d ore=%d pos=%s hp=%d class=%s inv=%s lanterns=%d workbenches=%d" % [
 		_mined_cells.size(), mine_damage.size(), _pending_torches.size(),
@@ -1175,6 +1282,7 @@ func save_game(reason: String) -> void:
 		"torches": torch_dict, "slain": slain_list,
 		"inventory": inv.duplicate(), "lanterns": lantern_dict, "workbenches": bench_dict,
 		"props_broken": broken_list, "props_moved": moved_dict,
+		"wazhack": wz.to_save() if wz != null else {},
 		"stats": {"time": _run_time, "max_depth": _max_depth, "props_smashed": _props_smashed, "deaths": _deaths}}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
@@ -1454,6 +1562,9 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	enemies.erase(enemy)
 	kills += 1
 	_grant_enemy_drop(enemy)
+	# WazHack wave: every 8 kills is a level-up (talent pick on V).
+	if wz != null:
+		wz.on_kill()
 	if enemy.spawn_id >= 0:
 		_slain_ids[enemy.spawn_id] = true
 		# Chunk 1: the foe returns 60 s after death (see _process).
@@ -1851,6 +1962,8 @@ func _run_selftest() -> void:
 	# no later phase may depend on the pre-chunk2 world state.
 	_run_selftest_chunk2()
 	_run_selftest_chunk8()
+	# WazHack wave runs after chunk8 (it teleports the player too).
+	_run_selftest_wazhack()
 	print("DEEPFALL_SELFTEST done")
 	get_tree().quit()
 
@@ -3368,6 +3481,8 @@ func _process(delta: float) -> void:
 	# Phase 10: hearts redraw on HP change, torch-light cull at 4 Hz.
 	if _hearts != null:
 		_hearts.queue_redraw()
+	if _hunger_bar != null:
+		_hunger_bar.queue_redraw()
 	_light_cull_timer += delta
 	if _light_cull_timer >= 0.25:
 		_light_cull_timer = 0.0
@@ -3405,6 +3520,12 @@ func _process(delta: float) -> void:
 	if not _selecting and not _card_open:
 		_run_time += delta
 		_max_depth = maxi(_max_depth, depth)
+		# WazHack wave: hunger, timers, traps, feature proximity.
+		# Run time is the hunger clock; nothing ticks while selecting
+		# or on the run card. Test mode never ticks (selftest drives
+		# wz directly) and traps stay inert there.
+		if _world_ready and not _test_mode and wz != null:
+			_wz_tick(delta)
 	# Chunk 1: slain foes respawn 60 s after death at their
 	# deterministic cell, so a camped room repopulates instead of
 	# sitting at foes=0. No pop-in: a foe only returns if its cell
@@ -3460,8 +3581,8 @@ func _process(delta: float) -> void:
 		# joins the hint line. "Mouse aim + hold LMB attack/mine"
 		# shortens to "Aim + hold LMB mine" so the line stays the
 		# same length — Phase 9/10 selftests fail it over 1248 px.
-		_hud2.text = "A/D move  Space jump  Shift dash  F slam  Aim + hold LMB mine  J attack%s  Q tool  T torch  L lantern  B bench  C craft  Down+Jump drop" % [
-			" (orb bolt)" if player.ranged else ""]
+		_hud2.text = "A/D move  Space jump  Shift dash  F slam  Aim + hold LMB mine  J attack%s  Q tool  T torch  L lantern  B bench  C craft  Down+Jump drop%s" % [
+			" (orb bolt)" if player.ranged else "", _wz_interact_hint]
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -3489,6 +3610,10 @@ func _input(event: InputEvent) -> void:
 			new_run()
 		elif event.keycode == KEY_C:
 			_toggle_craft_panel()
+		elif event.keycode == KEY_X:
+			_wz_interact()
+		elif event.keycode == KEY_V:
+			_wz_open_talents()
 		elif event.keycode == KEY_L:
 			_place_lantern()
 		elif event.keycode == KEY_B:
@@ -3825,6 +3950,11 @@ const RECIPES := {
 		"desc": "4 wood — hand — floor prop, craft lanterns near it"},
 	"lantern": {"name": "Lantern", "cost": {"gold": 1, "glass": 1, "torch": 1}, "station": "workbench",
 		"desc": "1 gold ore + 1 glass + 1 torch — WORKBENCH — light 10 tiles"},
+	# WazHack wave: cooking at the workbench.
+	"cooked_meat": {"name": "Cooked Meat", "cost": {"meat": 1, "coal": 1}, "station": "workbench",
+		"desc": "1 raw meat + 1 coal — WORKBENCH — food, +55 hunger"},
+	"mushroom_stew": {"name": "Mushroom Stew", "cost": {"mushroom": 2, "coal": 1}, "station": "workbench",
+		"desc": "2 mushroom + 1 coal — WORKBENCH — food, +40 hunger"},
 }
 const LANTERN_RADIUS_TILES := 10
 const WORKBENCH_RANGE := 3
@@ -3895,6 +4025,11 @@ func _grant_enemy_drop(enemy: Node2D) -> void:
 			else:
 				drops = [["stone", 1]]
 				print("DEEPFALL_DROP slug=%s item=stone n=1" % enemy.slug)
+	# WazHack wave: food / coins / unidentified loot, deterministic
+	# by spawn_id (never the global RNG).
+	if wz != null:
+		for extra in wz.roll_drop(enemy.slug, enemy.spawn_id):
+			drops.append(extra)
 	for dspec in drops:
 		var ld: Node2D = LOOT_SCRIPT.new()
 		ld.setup(String(dspec[0]), int(dspec[1]), self)
@@ -3903,9 +4038,15 @@ func _grant_enemy_drop(enemy: Node2D) -> void:
 
 func collect_loot(drop: Node2D) -> void:
 	inv[drop.item] = int(inv.get(drop.item, 0)) + drop.amount
+	# WazHack wave: Literacy identifies on pickup.
+	if wz != null:
+		wz.on_collect(drop.item)
+	var disp := String(drop.item).capitalize()
+	if wz != null:
+		disp = wz.display_name(drop.item)
 	if fx != null:
 		fx.sfx("pickup", 0.12)
-		fx.float_text(player.position + Vector2(0, -60), "+%d %s" % [drop.amount, String(drop.item).capitalize()], Color(1, 0.95, 0.7))
+		fx.float_text(player.position + Vector2(0, -60), "+%d %s" % [drop.amount, disp], Color(1, 0.95, 0.7))
 	print("DEEPFALL_LOOT_COLLECTED item=%s n=%d total=%d" % [drop.item, drop.amount, int(inv[drop.item])])
 
 func spawn_enemy_corpse(e: Node2D) -> void:
@@ -3936,7 +4077,7 @@ func _can_craft(rid: String) -> bool:
 func _craft(rid: String) -> bool:
 	var r: Dictionary = RECIPES[rid]
 	if String(r["station"]) == "workbench" and not _near_workbench():
-		_set_craft_status("Lantern needs a workbench within %d tiles — place one with B first." % WORKBENCH_RANGE)
+		_set_craft_status("%s needs a workbench within %d tiles — place one with B first." % [String(r["name"]), WORKBENCH_RANGE])
 		print("DEEPFALL_CRAFT_FAIL id=%s reason=needs_workbench" % rid)
 		return false
 	for k in (r["cost"] as Dictionary).keys():
@@ -3961,6 +4102,10 @@ func _craft(rid: String) -> bool:
 			inv["workbench"] += 1
 		"lantern":
 			inv["lantern"] += 1
+		"cooked_meat":
+			inv["cooked_meat"] += 1
+		"mushroom_stew":
+			inv["mushroom_stew"] += 1
 	_set_craft_status("Crafted %s." % String(r["name"]))
 	print("DEEPFALL_CRAFTED id=%s inv=%s torches=%d" % [rid, str(inv), torches_held])
 	save_game("craft")
@@ -4096,9 +4241,9 @@ func _build_craft_panel() -> void:
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.offset_left = -320
-	panel.offset_top = -260
+	panel.offset_top = -300
 	panel.offset_right = 320
-	panel.offset_bottom = 260
+	panel.offset_bottom = 300
 	panel.visible = false
 	panel.name = "CraftPanel"
 	var sb := StyleBoxFlat.new()
@@ -4110,9 +4255,14 @@ func _build_craft_panel() -> void:
 	panel.add_theme_stylebox_override("panel", sb)
 	$HUD.add_child(panel)
 	_craft_panel = panel
+	# WazHack wave: the USE section can grow with held consumables,
+	# so the panel body scrolls instead of clipping.
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(sc)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
-	panel.add_child(vb)
+	sc.add_child(vb)
 	# Header row: title left, Close right.
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
@@ -4139,11 +4289,13 @@ func _build_craft_panel() -> void:
 	# Section 2: workbench station (lantern), with the gating rule shown.
 	vb.add_child(_craft_section_header("WORKBENCH"))
 	_bench_caption = Label.new()
-	_bench_caption.text = "Lantern needs a workbench within 3 tiles — place one with B first."
+	_bench_caption.text = "Lantern and cooking need a workbench within 3 tiles — place one with B first."
 	_bench_caption.add_theme_font_size_override("font_size", 14)
 	_bench_caption.add_theme_color_override("font_color", Color(1.0, 0.75, 0.4))
 	vb.add_child(_bench_caption)
 	vb.add_child(_craft_recipe_row("lantern"))
+	vb.add_child(_craft_recipe_row("cooked_meat"))
+	vb.add_child(_craft_recipe_row("mushroom_stew"))
 	# Section 3: placing, visually divided from crafting.
 	vb.add_child(HSeparator.new())
 	vb.add_child(_craft_section_header("PLACE"))
@@ -4167,6 +4319,14 @@ func _build_craft_panel() -> void:
 	_craft_status.text = "Torch: 1 wood + 1 coal. Lantern needs a workbench nearby."
 	_craft_status.add_theme_font_size_override("font_size", 15)
 	vb.add_child(_craft_status)
+	# WazHack wave: USE section — held consumables (food / potions /
+	# wands / rings / scrolls) with Use buttons. Only held items get
+	# a row; rows are rebuilt on every refresh.
+	vb.add_child(HSeparator.new())
+	vb.add_child(_craft_section_header("USE (ITEMS)"))
+	_wz_items_box = VBoxContainer.new()
+	_wz_items_box.add_theme_constant_override("separation", 4)
+	vb.add_child(_wz_items_box)
 	_refresh_craft_panel()
 
 func _craft_section_header(text: String) -> Label:
@@ -4187,6 +4347,10 @@ func _craft_recipe_icon(rid: String) -> Texture2D:
 			return load("res://assets/items/lantern-64.png")
 		"workbench":
 			return load("res://assets/hero/props/workbench.png")
+		"cooked_meat":
+			return load("res://assets/hero/loot/cooked_meat.png")
+		"mushroom_stew":
+			return load("res://assets/hero/loot/mushroom_stew.png")
 		"glass":
 			if _glass_icon_tex == null:
 				var img := Image.create(48, 48, false, Image.FORMAT_RGBA8)
@@ -4267,6 +4431,31 @@ func _refresh_craft_panel() -> void:
 	(_place_buttons["torch"] as Button).disabled = torches_held <= 0
 	(_place_buttons["lantern"] as Button).disabled = int(inv["lantern"]) <= 0
 	(_place_buttons["workbench"] as Button).disabled = int(inv["workbench"]) <= 0
+	# WazHack wave: rebuild the USE rows for held consumables.
+	if _wz_items_box != null:
+		for ch in _wz_items_box.get_children():
+			ch.free()
+		if wz != null:
+			for item in _wz_consumable_items():
+				var row := HBoxContainer.new()
+				row.add_theme_constant_override("separation", 8)
+				var ic := TextureRect.new()
+				ic.texture = load("res://assets/hero/loot/%s.png" % item)
+				ic.custom_minimum_size = Vector2(32, 32)
+				ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				row.add_child(ic)
+				var nl := Label.new()
+				nl.text = "%s x%d" % [wz.display_name(item), int(inv.get(item, 0))]
+				nl.add_theme_font_size_override("font_size", 15)
+				nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				row.add_child(nl)
+				var ub := Button.new()
+				ub.text = "Use"
+				ub.custom_minimum_size = Vector2(70, 32)
+				ub.pressed.connect(_use_item.bind(item))
+				row.add_child(ub)
+				_wz_items_box.add_child(row)
 
 func _show_craft_panel(open: bool) -> void:
 	if _craft_panel == null:
@@ -7747,3 +7936,578 @@ func _run_selftest_p13_pre() -> void:
 	await _t11_wait(0.5)
 	print("DEEPFALL_P13 after_card dead=%s paused=%s (expect false, false)" % [str(player.dead), str(get_tree().paused)])
 	await _t11_wait(0.5)
+
+# --- WazHack wave: systems 1-8 (hunger, identification, traps,
+# shops/altar/fountain, talents, pets, polymorph, rumours) ---
+# main.gd owns the world/HUD/save; scripts/wazhack.gd owns the rules.
+# This section is the glue: per-frame tick, feature markers, the
+# generic feature panel, the talent panel, item use, and the
+# --selftest-wazhack / --dump-wazhack / --screenshot-wazhack modes.
+
+func _wz_headless_test() -> bool:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--selftest") or a.begins_with("--screenshot") or a in ["--soak", "--dump-layers", "--dump-map", "--dump-wazhack", "--climb-probe"]:
+			return true
+	return false
+
+func _wz_spawn_features() -> void:
+	if wz == null:
+		return
+	for s in wz.shops:
+		var cell: Vector2i = s["cell"]
+		var kind := String(s["kind"])
+		var floor_y := float((cell.y + 1) * TILE)
+		var cx := float((cell.x + 0.5) * TILE)
+		if kind == "forge" or kind == "bakery":
+			var keeper := Sprite2D.new()
+			keeper.texture = load("res://assets/enemies_px/shopkeeper/idle.png")
+			keeper.scale = Vector2(3, 3)
+			keeper.position = Vector2(cx, floor_y - 60.0)
+			add_child(keeper)
+			_wz_feature_nodes.append(keeper)
+		elif kind == "altar":
+			var altar := Sprite2D.new()
+			altar.texture = load("res://assets/items/altar.png")
+			altar.position = Vector2(cx, floor_y - 32.0)
+			add_child(altar)
+			_wz_feature_nodes.append(altar)
+		elif kind == "fountain":
+			var ftn := Sprite2D.new()
+			ftn.texture = load("res://assets/items/fountain.png")
+			ftn.position = Vector2(cx, floor_y - 32.0)
+			add_child(ftn)
+			_wz_feature_nodes.append(ftn)
+	# The pup waits at its den — never in test runs (P11 safety:
+	# no follower physics in selftests).
+	if not _wz_headless_test():
+		_wz_spawn_pet()
+
+func _wz_spawn_pet() -> void:
+	if wz == null or wz.pet_den_cell.x < 0:
+		return
+	if pet != null and is_instance_valid(pet):
+		pet.free()
+	pet = PET_SCRIPT.new()
+	pet.setup(self, fg, player)
+	pet.tamed = wz.pet_tamed
+	pet.hp = wz.pet_hp
+	pet.dead = not wz.pet_alive
+	pet.position = Vector2((wz.pet_den_cell.x + 0.5) * TILE, (wz.pet_den_cell.y + 1) * TILE - pet.half_h)
+	pet.z_index = 2
+	add_child(pet)
+
+func _wz_tick(delta: float) -> void:
+	wz.tick(delta)
+	# burden: heavy packs slow the walk (player.gd applies the mult)
+	player.burden_mult = wz.burden_mult()
+	# keep wz pet state in sync with the node (save reads wz)
+	if pet != null and is_instance_valid(pet):
+		wz.pet_hp = pet.hp
+		wz.pet_tamed = pet.tamed
+		wz.pet_alive = not pet.dead
+	# traps: stepping on a cell triggers it. Inert in test mode —
+	# this whole tick only runs outside test mode.
+	if wz.check_traps(player.cell()):
+		_wz_sync_trap_markers()
+		save_game("trap")
+	_wz_sync_trap_markers()
+	var pc: Vector2i = player.cell()
+	# rumour on first entering a feature room
+	var ri: int = wz.room_index(pc)
+	for s in wz.shops:
+		if int(s["room"]) == ri:
+			var key := "%s_%d" % [String(s["kind"]), int(s["room"])]
+			if not wz.visited_features.has(key):
+				wz.visited_features[key] = true
+				log_event(wz.rumour())
+	# interact hint for the HUD line
+	_wz_interact_hint = ""
+	if pet != null and is_instance_valid(pet) and not pet.dead and not wz.pet_tamed:
+		var dc: Vector2i = pet.cell()
+		if maxi(absi(dc.x - pc.x), absi(dc.y - pc.y)) <= 1:
+			_wz_interact_hint = "  X tame"
+	if _wz_interact_hint == "" and wz.feature_near(pc) != null:
+		_wz_interact_hint = "  X use"
+
+func _wz_sync_trap_markers() -> void:
+	if wz == null:
+		return
+	for t in wz.traps:
+		if not bool(t["revealed"]):
+			continue
+		var c: Vector2i = t["cell"]
+		var key := "%d,%d" % [c.x, c.y]
+		if _wz_trap_markers.has(key):
+			continue
+		var mark := Sprite2D.new()
+		mark.texture = load("res://assets/items/trap_mark.png")
+		mark.position = Vector2((c.x + 0.5) * TILE, (c.y + 0.5) * TILE)
+		add_child(mark)
+		_wz_trap_markers[key] = mark
+		_wz_feature_nodes.append(mark)
+
+func _wz_interact() -> void:
+	if wz == null or _selecting or _card_open:
+		return
+	var pc: Vector2i = player.cell()
+	# the pup first: tame with meat, or greet
+	if pet != null and is_instance_valid(pet) and not pet.dead:
+		var dc: Vector2i = pet.cell()
+		if maxi(absi(dc.x - pc.x), absi(dc.y - pc.y)) <= 1:
+			if not wz.pet_tamed:
+				if wz.tame_pup():
+					pet.tamed = true
+					save_game("tame")
+				return
+			log_event("Your pup wags its tail.")
+			return
+	var feat = wz.feature_near(pc)
+	if feat == null:
+		return
+	match String(feat["kind"]):
+		"forge":
+			_wz_open_shop("forge")
+		"bakery":
+			_wz_open_shop("bakery")
+		"altar":
+			_wz_open_altar()
+		"fountain":
+			_wz_open_fountain()
+
+# --- generic feature panel (shops / altar / fountain / talents) ---
+
+func _build_wazhack_panel() -> void:
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -240
+	panel.offset_top = -190
+	panel.offset_right = 240
+	panel.offset_bottom = 190
+	panel.visible = false
+	panel.name = "WazhackPanel"
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.07, 0.1, 0.96)
+	sb.border_color = Color(1.0, 0.8, 0.4, 0.8)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(14)
+	sb.set_content_margin_all(16)
+	panel.add_theme_stylebox_override("panel", sb)
+	$HUD.add_child(panel)
+	_wz_panel = panel
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	panel.add_child(vb)
+	_wz_panel_title = Label.new()
+	_wz_panel_title.add_theme_font_size_override("font_size", 20)
+	vb.add_child(_wz_panel_title)
+	_wz_panel_body = Label.new()
+	_wz_panel_body.add_theme_font_size_override("font_size", 15)
+	_wz_panel_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(_wz_panel_body)
+	_wz_panel_actions = VBoxContainer.new()
+	_wz_panel_actions.add_theme_constant_override("separation", 6)
+	vb.add_child(_wz_panel_actions)
+
+func _wz_open_panel(title: String, body: String, actions: Array, refresh = null) -> void:
+	if _wz_panel == null:
+		return
+	_wz_panel_title.text = title
+	_wz_panel_body.text = body
+	for ch in _wz_panel_actions.get_children():
+		ch.free()
+	_wz_panel_refresh = refresh
+	for a in actions:
+		var b := Button.new()
+		b.text = String(a["label"])
+		b.custom_minimum_size = Vector2(0, 36)
+		b.disabled = bool(a.get("disabled", false))
+		b.pressed.connect(_wz_panel_action.bind(a))
+		_wz_panel_actions.add_child(b)
+	_wz_panel.visible = true
+
+func _wz_panel_action(a: Dictionary) -> void:
+	if a.has("call"):
+		(a["call"] as Callable).call()
+	if bool(a.get("refresh", false)) and _wz_panel_refresh != null:
+		(_wz_panel_refresh as Callable).call()
+	else:
+		_wz_close_panel()
+
+func _wz_close_panel() -> void:
+	if _wz_panel != null:
+		_wz_panel.visible = false
+	_wz_panel_refresh = null
+
+func _wz_open_shop(kind: String) -> void:
+	var coins: int = int(inv.get("coins", 0))
+	var title := "FORGE — SMITHY" if kind == "forge" else "BAKERY"
+	var lines: Array = []
+	var actions: Array = []
+	if kind == "forge":
+		lines = ["The keeper hammers at an anvil. Coins: %d." % coins,
+			"Bread %d coins · Raw meat %d coins" % [wz.price(12), wz.price(8)],
+			"Sells: gold ore %d coins · amber %d coins" % [wz.sell_price(5), wz.sell_price(8)]]
+		actions = [
+			{"label": "Buy Bread (%d)" % wz.price(12), "call": Callable(wz, "shop_buy").bind("bread", wz.price(12)), "refresh": true},
+			{"label": "Buy Raw Meat (%d)" % wz.price(8), "call": Callable(wz, "shop_buy").bind("meat", wz.price(8)), "refresh": true},
+			{"label": "Sell Gold Ore (+%d)" % wz.sell_price(5), "call": Callable(wz, "shop_sell").bind("gold", wz.sell_price(5)), "refresh": true},
+			{"label": "Sell Amber (+%d)" % wz.sell_price(8), "call": Callable(wz, "shop_sell").bind("amber", wz.sell_price(8)), "refresh": true},
+			{"label": "Close", "call": Callable(self, "_wz_close_panel")}]
+	else:
+		lines = ["The baker slides loaves from a clay oven. Coins: %d." % coins,
+			"Bread %d coins · Mushroom %d coins · Royal jelly %d coins" % [wz.price(10), wz.price(4), wz.price(40)]]
+		actions = [
+			{"label": "Buy Bread (%d)" % wz.price(10), "call": Callable(wz, "shop_buy").bind("bread", wz.price(10)), "refresh": true},
+			{"label": "Buy Mushroom (%d)" % wz.price(4), "call": Callable(wz, "shop_buy").bind("mushroom", wz.price(4)), "refresh": true},
+			{"label": "Buy Royal Jelly (%d)" % wz.price(40), "call": Callable(wz, "shop_buy").bind("royal_jelly", wz.price(40)), "refresh": true},
+			{"label": "Close", "call": Callable(self, "_wz_close_panel")}]
+	_wz_open_panel(title, "\n".join(lines), actions, Callable(self, "_wz_open_shop").bind(kind))
+
+func _wz_open_altar() -> void:
+	var body := "A stone altar, an amber gem set in its heart. Coins: %d.\nBless one carried item for %d coins." % [int(inv.get("coins", 0)), wz.price(15)]
+	_wz_open_panel("ALTAR", body, [
+		{"label": "Bless an item (%d)" % wz.price(15), "call": Callable(wz, "altar_bless"), "refresh": true},
+		{"label": "Close", "call": Callable(self, "_wz_close_panel")}],
+		Callable(self, "_wz_open_altar"))
+
+func _wz_open_fountain() -> void:
+	var body := "A stone basin, water black as the cave. Drink, and take your chances."
+	_wz_open_panel("FOUNTAIN", body, [
+		{"label": "Drink", "call": Callable(wz, "fountain_drink"), "refresh": true},
+		{"label": "Close", "call": Callable(self, "_wz_close_panel")}],
+		Callable(self, "_wz_open_fountain"))
+
+func _wz_open_talents() -> void:
+	if wz == null or _selecting or _card_open:
+		return
+	if wz.talent_choices.is_empty():
+		_wz_open_panel("TALENTS", "No talent waiting. Slay foes — every 8 kills is a level up. (Level %d, %d kills)" % [wz.level, kills], [
+			{"label": "Close", "call": Callable(self, "_wz_close_panel")}])
+		return
+	var lines: Array = ["Level %d — choose one:" % wz.level]
+	var actions: Array = []
+	for tid in wz.talent_choices:
+		lines.append("%s — %s" % [String(DeepfallWazhack.TALENT_NAMES[tid]), String(DeepfallWazhack.TALENT_DESCS[tid])])
+		actions.append({"label": String(DeepfallWazhack.TALENT_NAMES[tid]), "call": Callable(self, "_wz_pick_talent").bind(String(tid))})
+	actions.append({"label": "Close", "call": Callable(self, "_wz_close_panel")})
+	_wz_open_panel("CHOOSE A TALENT", "\n".join(lines), actions)
+
+func _wz_pick_talent(tid: String) -> void:
+	if wz != null and wz.apply_talent(tid):
+		save_game("talent")
+
+func _wz_consumable_items() -> Array:
+	var out: Array = []
+	if wz == null:
+		return out
+	for item in ["meat", "cooked_meat", "bread", "mushroom", "mushroom_stew", "royal_jelly",
+			"potion_cloudy", "potion_swirly", "potion_bubbly", "potion_murky", "potion_blue", "potion_black",
+			"wand_crooked", "wand_ebony", "wand_glass", "wand_forked",
+			"ring_agate", "ring_twisted", "ring_onyx", "ring_tigereye", "ring_control",
+			"scroll_identify", "scroll_curse", "scroll_mapping", "scroll_taming"]:
+		if int(inv.get(item, 0)) > 0:
+			out.append(item)
+	return out
+
+func _use_item(item: String) -> void:
+	if wz == null:
+		return
+	if wz.use_item(item):
+		save_game("use_item")
+		_refresh_craft_panel()
+
+func _dump_wazhack() -> void:
+	print("WAZHACK seed=%d hunger=%.1f level=%d" % [run_seed, wz.hunger, wz.level])
+	print("WAZHACK traps=%d shops=%d pet_den=%s rumours=%d" % [wz.traps.size(), wz.shops.size(), str(wz.pet_den_cell), wz.rumours.size()])
+	for t in wz.traps:
+		print("WAZHACK_TRAP cell=%s kind=%s revealed=%s" % [str(t["cell"]), String(t["kind"]), str(bool(t["revealed"]))])
+	for s in wz.shops:
+		print("WAZHACK_SHOP kind=%s room=%d cell=%s" % [String(s["kind"]), int(s["room"]), str(s["cell"])])
+	for k in wz.identified.keys():
+		print("WAZHACK_ID %s -> %s bless=%d known=%s" % [k, String(wz.identified[k]), int(wz.bless.get(k, 0)), str(bool(wz.known.get(k, false)))])
+	print("WAZHACK_RUMOURS %s" % str(wz.rumour_counts()))
+
+func _run_screenshot_wazhack() -> void:
+	inv["meat"] = 2
+	inv["bread"] = 1
+	inv["potion_cloudy"] = 1
+	inv["potion_blue"] = 1
+	inv["wand_crooked"] = 1
+	inv["ring_agate"] = 1
+	inv["scroll_identify"] = 1
+	inv["coins"] = 23
+	wz.hunger = 62.0
+	_show_craft_panel(true)
+	await get_tree().create_timer(1.0).timeout
+	# the USE (ITEMS) section sits below the fold — scroll the panel
+	# to the bottom so the capture proves the item rows render.
+	var sc: ScrollContainer = _craft_panel.get_child(0) as ScrollContainer
+	if sc != null:
+		sc.scroll_vertical = 99999
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var img := get_viewport().get_texture().get_image()
+	img.save_png("res://wazhack-shot-items.png")
+	print("DEEPFALL_SCREENSHOT_WAZHACK_SAVED hunger=%.0f items=%d" % [wz.hunger, _wz_consumable_items().size()])
+
+func _run_selftest_wazhack() -> void:
+	print("DEEPFALL_WAZHACK_SELFTEST start seed=%d" % run_seed)
+	var passed := 0
+	var failed := 0
+	var snap_wz: Dictionary = wz.to_save()
+	var snap_inv: Dictionary = inv.duplicate()
+	var snap_hp: int = player.hp
+	var snap_pos: Vector2 = player.position
+	var snap_melee: int = player.melee_dmg
+	var snap_speed: float = player.speed_mult
+	var snap_kills: int = kills
+	var snap_class: String = player.class_id
+	# every check runs on a fresh deterministic roll, then restore
+	wz.new_run(data["rooms"])
+	# 1. hunger drain: 100 -> 98 over 10 s
+	wz.hunger = 100.0
+	wz.tick(10.0)
+	if absf(wz.hunger - 98.0) < 0.01:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL hunger_drain=%.2f (expect 98.00)" % wz.hunger)
+	# 2. starving: -1 HP per 3 s below 15
+	player.hp = 100
+	wz.hunger = 10.0
+	wz.starve_timer = 0.0
+	wz.tick(3.5)
+	if player.hp == 99:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL starve hp=%d (expect 99)" % player.hp)
+	player.hp = 100
+	# 3. satiated: +1 HP per 8 s above 80
+	player.hp = 50
+	wz.hunger = 90.0
+	wz.satiated_timer = 0.0
+	wz.tick(8.5)
+	if player.hp == 51:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL satiated hp=%d (expect 51)" % player.hp)
+	player.hp = 100
+	wz.hunger = 100.0
+	# 4. burden: >80 carried items slows the player
+	inv["wood"] = 81
+	var b1: float = wz.burden_mult()
+	inv["wood"] = 0
+	var b0: float = wz.burden_mult()
+	if b1 == 0.75 and b0 == 1.0:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL burden heavy=%.2f light=%.2f (expect 0.75, 1.00)" % [b1, b0])
+	# 5. identification: 14 appearances; per-category effects all
+	# distinct (13 distinct effect names — "polymorph" is both a
+	# potion and a wand effect), all unknown at roll time
+	var fx_potion := {}
+	var fx_wand := {}
+	var fx_ring := {}
+	var id_ok: bool = wz.identified.size() == 14
+	for k in wz.identified.keys():
+		if bool(wz.known.get(k, false)):
+			id_ok = false
+		if k.begins_with("potion_"):
+			fx_potion[String(wz.identified[k])] = true
+		elif k.begins_with("wand_"):
+			fx_wand[String(wz.identified[k])] = true
+		elif k.begins_with("ring_"):
+			fx_ring[String(wz.identified[k])] = true
+	if id_ok and fx_potion.size() == 6 and fx_wand.size() == 4 and fx_ring.size() == 4:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL identify size=%d potion_fx=%d wand_fx=%d ring_fx=%d (expect 14, 6, 4, 4)" % [wz.identified.size(), fx_potion.size(), fx_wand.size(), fx_ring.size()])
+	# 6. bless distribution sane (15/15/70 per appearance)
+	var nb := 0
+	var nc := 0
+	for k in wz.bless.keys():
+		if int(wz.bless[k]) == 1:
+			nb += 1
+		elif int(wz.bless[k]) == -1:
+			nc += 1
+	if nb >= 0 and nb <= 6 and nc >= 0 and nc <= 6:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL bless blessed=%d cursed=%d (expect 0-6 each)" % [nb, nc])
+	# 7. traps: ~1 per 3 rooms, none in spawn/exit rooms, valid kinds
+	var trap_ok: bool = wz.traps.size() >= 10 and wz.traps.size() <= 16
+	for t in wz.traps:
+		if String(t["kind"]) not in DeepfallWazhack.TRAP_KINDS:
+			trap_ok = false
+		var ri: int = wz.room_index(t["cell"])
+		if ri <= 0 or ri >= data["rooms"].size() - 1:
+			trap_ok = false
+		if bool(t["sprung"]):
+			trap_ok = false
+	if trap_ok:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL traps n=%d" % wz.traps.size())
+	# 8. shops: exactly 3 (forge + bakery + altar/fountain), distinct rooms,
+	# and no shop shares a cell with a trap
+	var kinds_seen := {}
+	var rooms_seen := {}
+	var shop_ok: bool = wz.shops.size() == 3
+	for s in wz.shops:
+		kinds_seen[String(s["kind"])] = true
+		rooms_seen[int(s["room"])] = true
+		if int(s["room"]) <= 0 or int(s["room"]) >= data["rooms"].size() - 1:
+			shop_ok = false
+		for t in wz.traps:
+			if t["cell"] == s["cell"]:
+				shop_ok = false
+	if shop_ok and kinds_seen.has("forge") and kinds_seen.has("bakery") and (kinds_seen.has("altar") or kinds_seen.has("fountain")) and rooms_seen.size() == 3:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL shops n=%d kinds=%s" % [wz.shops.size(), str(kinds_seen.keys())])
+	# 9. eat: raw meat +25, gastronomy +50%
+	inv["meat"] = 1
+	wz.hunger = 50.0
+	wz.eat("meat")
+	var eat_ok := absf(wz.hunger - 75.0) < 0.01 and int(inv["meat"]) == 0
+	wz.talents["gastronomy"] = true
+	inv["meat"] = 1
+	wz.hunger = 50.0
+	wz.eat("meat")
+	eat_ok = eat_ok and absf(wz.hunger - 88.0) < 0.01
+	wz.talents["gastronomy"] = false
+	if eat_ok:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL eat hunger=%.1f (expect 75 then 88)" % wz.hunger)
+	# 10. level-up: every 8 kills, 3 unowned choices, apply sticks
+	kills = 7
+	wz.level = 0
+	var l0: bool = wz.on_kill()
+	kills = 8
+	var l1: bool = wz.on_kill()
+	var lvl_ok: bool = not l0 and l1 and wz.level == 1 and wz.talent_choices.size() == 3
+	if lvl_ok:
+		var pick: String = wz.talent_choices[0]
+		lvl_ok = wz.apply_talent(pick) and bool(wz.talents[pick]) and wz.talent_choices.is_empty()
+	if lvl_ok:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL level l0=%s l1=%s level=%d choices=%d" % [str(l0), str(l1), wz.level, wz.talent_choices.size()])
+	# 11. potion use identifies on use
+	inv["potion_cloudy"] = 1
+	wz.known["potion_cloudy"] = false
+	wz.use_potion("cloudy")
+	if int(inv["potion_cloudy"]) == 0 and bool(wz.known["potion_cloudy"]) and wz.display_name("potion_cloudy").begins_with("Potion of "):
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL potion_use known=%s count=%d name=%s" % [str(wz.known.get("potion_cloudy", false)), int(inv["potion_cloudy"]), wz.display_name("potion_cloudy")])
+	# 12. trap trigger: stepping on a trap cell springs it
+	if wz.traps.is_empty():
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL trap_trigger no traps rolled")
+	else:
+		var tcell: Vector2i = wz.traps[0]["cell"]
+		player.position = Vector2((tcell.x + 0.5) * TILE, (tcell.y + 0.5) * TILE)
+		var sprung: bool = wz.check_traps(tcell)
+		var trap_fx: bool = sprung and bool(wz.traps[0]["sprung"]) and (wz.poly_active or player.sleeping or player.position != Vector2((tcell.x + 0.5) * TILE, (tcell.y + 0.5) * TILE))
+		if trap_fx:
+			passed += 1
+		else:
+			failed += 1
+			print("DEEPFALL_WAZHACK_SELFTEST FAIL trap_trigger sprung=%s poly=%s sleep=%s" % [str(sprung), str(wz.poly_active), str(player.sleeping)])
+		if wz.poly_active:
+			wz.tick(25.0)
+		player.sleeping = false
+		wz.sleep_left = 0.0
+	# 13. save round-trip: fresh instance restores hunger/level/traps
+	var s1: Dictionary = wz.to_save()
+	var wz2 = WAZHACK_SCRIPT.new()
+	wz2.from_save(s1)
+	var s2: Dictionary = wz2.to_save()
+	if absf(float(s2["hunger"]) - float(s1["hunger"])) < 0.01 and int(s2["level"]) == int(s1["level"]) and (s2["traps"] as Array).size() == (s1["traps"] as Array).size() and s2["identified"] == s1["identified"]:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL save_roundtrip")
+	# 14. rumours: 43 lines from the file, 23 true / 12 false / 8 unhelpful
+	var rc: Dictionary = wz.rumour_counts()
+	if wz.rumours.size() == 43 and int(rc["t"]) == 23 and int(rc["f"]) == 12 and int(rc["u"]) == 8:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL rumours n=%d counts=%s (expect 43, 23/12/8)" % [wz.rumours.size(), str(rc)])
+	# 15. drop roll deterministic by spawn_id (ghoul id 6)
+	var dr: Array = wz.roll_drop("miner-ghoul", 6)
+	var dr_expect := [["coins", 1], ["meat", 1], ["scroll_magic_mapping", 1]]
+	if str(dr) == str(dr_expect) and wz.roll_drop("miner-ghoul", -1).is_empty():
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL drops %s (expect %s)" % [str(dr), str(dr_expect)])
+	# 16. polymorph self: stats change and restore exactly.
+	# Force tech here: the full suite runs phase 9 first, which
+	# leaves the mage class active (melee 10) — the check must not
+	# depend on the ambient class. Restore at the end puts the
+	# ambient melee/speed back.
+	player.set_class("tech")
+	wz._self_poly("bat", 20.0)
+	var poly_ok: bool = wz.poly_active and player.melee_dmg == 8 and absf(player.speed_mult - 1.4) < 0.01
+	wz._end_poly()
+	poly_ok = poly_ok and not wz.poly_active and player.melee_dmg == 15 and absf(player.speed_mult - 1.0) < 0.01
+	if poly_ok:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL poly melee=%d speed=%.2f active=%s" % [player.melee_dmg, player.speed_mult, str(wz.poly_active)])
+	# 17. pet den is a real floor cell in a non-spawn room, and shares
+	# no cell with a trap or a shop
+	var den_ok: bool = wz.pet_den_cell.x >= 0 and wz.room_index(wz.pet_den_cell) > 0
+	for t in wz.traps:
+		if t["cell"] == wz.pet_den_cell:
+			den_ok = false
+	for s in wz.shops:
+		if s["cell"] == wz.pet_den_cell:
+			den_ok = false
+	if den_ok:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL pet_den=%s" % str(wz.pet_den_cell))
+	# 18. shop buy/sell + commerce math
+	inv["coins"] = 20
+	inv["gold"] = 2
+	wz.talents["commerce"] = false
+	var shop_ok2: bool = wz.shop_buy("bread", wz.price(12)) and int(inv["coins"]) == 8 and int(inv["bread"]) == 1
+	shop_ok2 = shop_ok2 and wz.shop_sell("gold", wz.sell_price(5)) and int(inv["coins"]) == 13 and int(inv["gold"]) == 1
+	wz.talents["commerce"] = true
+	shop_ok2 = shop_ok2 and wz.price(10) == 8 and wz.sell_price(5) == 6
+	wz.talents["commerce"] = false
+	if shop_ok2:
+		passed += 1
+	else:
+		failed += 1
+		print("DEEPFALL_WAZHACK_SELFTEST FAIL shop coins=%d bread=%d gold=%d" % [int(inv["coins"]), int(inv["bread"]), int(inv["gold"])])
+	# restore everything the checks touched
+	for k in snap_inv.keys():
+		inv[k] = snap_inv[k]
+	player.hp = snap_hp
+	player.position = snap_pos
+	player.melee_dmg = snap_melee
+	player.speed_mult = snap_speed
+	player.modulate = Color(1, 1, 1, 1)
+	player.sleeping = false
+	kills = snap_kills
+	wz.from_save(snap_wz)
+	wz._restored = false
+	print("DEEPFALL_WAZHACK_SELFTEST done pass=%d fail=%d (expect 18, 0)" % [passed, failed])

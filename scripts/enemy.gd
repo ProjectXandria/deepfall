@@ -233,6 +233,10 @@ func _ai(delta: float) -> void:
 	if player == null or (player.has_method("is_dead") and player.call("is_dead")):
 		_idle_wander(delta)
 		return
+	# WazHack wave: invisibility potion — foes cannot see the player.
+	if main_node != null and main_node.get("wz") != null and float(main_node.wz.get("invis_left")) > 0.0:
+		_idle_wander(delta)
+		return
 	var to_player: Vector2 = player.position - position
 	var dist: float = to_player.length()
 	var dy: float = absf(to_player.y)
@@ -302,6 +306,17 @@ func _strike() -> void:
 	if player.has_method("is_dead") and player.call("is_dead"):
 		return
 	var to_player: Vector2 = player.position - position
+	# WazHack wave: the pup body-blocks. If the tamed pup is alive,
+	# in strike range, and closer than the player, the blow lands
+	# on the pup instead.
+	if main_node != null and main_node.get("pet") != null:
+		var pet = main_node.get("pet")
+		if pet != null and not bool(pet.get("dead")) and bool(pet.get("tamed")):
+			var to_pet: Vector2 = pet.position - position
+			if absf(to_pet.x) <= attack_range + 8.0 and absf(to_pet.y) < 64.0 and to_pet.length() < to_player.length():
+				if pet.has_method("take_hit"):
+					pet.call("take_hit", damage, position.x)
+				return
 	if absf(to_player.x) <= attack_range + 8.0 and absf(to_player.y) < 64.0:
 		if player.has_method("take_hit"):
 			player.call("take_hit", damage, position.x)

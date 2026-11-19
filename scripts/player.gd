@@ -74,6 +74,11 @@ var class_display_name := "Tech Soldier"
 var melee_dmg := 15
 var speed_mult := 1.0
 var ranged := false
+# WazHack wave: burden (heavy packs slow the walk) and sleep
+# (sleep traps knock the player out for a few seconds). Both are
+# set by main.gd / scripts/wazhack.gd, never by input.
+var burden_mult := 1.0
+var sleeping := false
 
 var fg: Array = []
 # Chunk 2: slope cells (cell -> {"shape": int, "mat": String}), mirrored
@@ -330,6 +335,7 @@ func respawn_at(spawn_pos: Vector2) -> void:
 	vel = Vector2.ZERO
 	hp = max_hp
 	dead = false
+	sleeping = false
 	hurt_timer = 0.0
 	attack_timer = 0.0
 	attack_cooldown = 0.0
@@ -380,11 +386,14 @@ func _physics_process(delta: float) -> void:
 		move += 1.0
 	if touch_move != 0.0:
 		move = touch_move
+	# WazHack wave: asleep means no movement input at all.
+	if sleeping:
+		move = 0.0
 	_crouching = on_ground and (Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN) or touch_crouch)
 	if move != 0.0 and not aiming and attack_timer <= 0.0 and _kb_timer <= 0.0:
 		facing = 1 if move > 0.0 else -1
-	var target := move * SPEED * speed_mult * (0.5 if _crouching else 1.0)
-	var jump_down := Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_W) or touch_jump
+	var target := move * SPEED * speed_mult * burden_mult * (0.5 if _crouching else 1.0)
+	var jump_down := (Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_W) or touch_jump) and not sleeping
 	if dash_timer > 0.0:
 		dash_timer = max(0.0, dash_timer - delta)
 		vel.y = 0.0

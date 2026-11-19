@@ -1,0 +1,47 @@
+# DEEPFALL rumours — t = true, f = false, u = unhelpful.
+# Shown on run start, on level-up, and on first entering a
+# shop / altar / fountain room. They teach the WazHack systems
+# without a tutorial. Tags are metadata, never shown in-game.
+t|The caves get hungrier the deeper you go. Eat before you starve.
+t|Cooked meat fills you twice over. Raw meat is a snack, not a meal.
+t|A workbench and a lump of coal turn raw meat into a feast.
+t|Mushrooms are food if you know them. Mycology makes them a meal.
+t|Royal jelly is worth more than gold. It fills you whole and knits wounds.
+t|A pup will follow a kind hand. Bring meat, not a sword.
+t|A tamed pup sniffs out traps before your boots find them.
+t|Not every potion is what it looks like. A cloudy bottle once saved a miner.
+t|Drink an unknown potion and you will learn what it was. That is one way to learn.
+t|An identify scroll tells you what a bottle truly holds.
+t|Blessed things help twice over. Cursed things help backwards.
+t|A cursed ring of regeneration still knits your wounds — but it eats twice as fast.
+t|The floor lies. Traps hide where you walk until something gives them away.
+t|A dog's nose, a sharp eye, or a probing wand — all three find traps.
+t|Shops take coins, not ore. The forge buys your gold and amber.
+t|A baker's bread costs less than a forge's. Both fill the same belly.
+t|An altar blesses what you carry, for coins. A blessed blade never was, but a blessed bottle is.
+t|Fountain water is a gamble. Sometimes it heals, sometimes it shows you things.
+t|Every eight kills makes you sharper. Choose what you learn well.
+t|Literacy means never drinking blind again. Everything you pick up tells you its name.
+t|Polymorph is a door that swings both ways. A bat is fast and frail; a golem is slow and strong.
+t|A control ring masters the shift. Wear it, and the change obeys you.
+t|The exit lies at the far end of the cave, past everything hungry.
+f|Bats never drop anything. Do not bother with them.
+f|Fountains are always safe. Drink deep, drink often.
+f|Cursed items are worthless. Throw them in the dark.
+f|The altar blesses for free if you pray long enough.
+f|Traps only sit in the deep dark. The high rooms are safe.
+f|Starving is a slow thing. You have hours before it matters.
+f|A pup is decoration. It cannot fight and it cannot find anything.
+f|Shops never move. The forge is always where you left it.
+f|Scrolls are all the same. Read any one and you know them all.
+f|Carrying more never slows you down. Pack it all in.
+f|Polymorph a foe and it stays twisted forever.
+f|The exit is wherever you dig. Any hole leads out.
+u|The amber down here hums when nobody is listening.
+u|A miner once counted every stone in the cave. He is still counting.
+u|The dark has a taste. Like cold iron and old rain.
+u|Somewhere below, something is also keeping a journal.
+u|The torches burn a little brighter when you are afraid.
+u|I heard the cave shift once. It sounded like a held breath.
+u|The spiders down here dream in webs.
+u|Do not trust a room with no shadows. It is hiding something.

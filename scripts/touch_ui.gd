@@ -158,6 +158,13 @@ func _ready() -> void:
 	craft_b.name = "CraftButton"
 	var save_b := _make_btn("SAVE", false, 0.0, _save_down, Callable())
 	save_b.name = "SaveButton"
+	# WazHack wave: USE (shops / altar / fountain / tame, the X key)
+	# and TALENT (level-up picks, the V key) — keyboard-only before,
+	# unreachable on the S25.
+	var use_b := _make_btn("USE", false, 0.0, _use_down, Callable())
+	use_b.name = "UseButton"
+	var talent_b := _make_btn("TALENT", false, 0.0, _talent_down, Callable())
+	talent_b.name = "TalentButton"
 	_btn_new = _make_btn("NEW", false, 0.0, _new_down, Callable())
 	_btn_new.name = "NewButton"
 	_btn_jump.name = "JumpButton"
@@ -228,7 +235,7 @@ func _layout() -> void:
 	var sw: float = (slots[0] as TBtn).size.x
 	var total := slots.size() * sw + (slots.size() - 1) * 8
 	var rw: float = (get_node("CraftButton") as TBtn).size.x + 8
-	var right_btns := ["MenuButton", "CraftButton", "SaveButton", "NewButton"]
+	var right_btns := ["MenuButton", "CraftButton", "SaveButton", "NewButton", "UseButton", "TalentButton"]
 	# centred, but never under the right-hand menu buttons (wide buttons
 	# / narrow screens) and never over the hearts on the left
 	var right_start := W - right_btns.size() * rw - 4
@@ -500,6 +507,12 @@ func _torch_down() -> void:
 
 func _craft_down() -> void:
 	main_node.call("_toggle_craft_panel")
+
+func _use_down() -> void:
+	main_node.call("_wz_interact")
+
+func _talent_down() -> void:
+	main_node.call("_wz_open_talents")
 
 func _save_down() -> void:
 	main_node.call("save_game", "manual")
