@@ -56,6 +56,18 @@ const STATS := {
 	# Skeleton_Crossbow on handslot.r, visual only — the AI is melee).
 	# Fast, fragile flanker: lowest hp, highest speed of the skeletons.
 	"skeleton-rogue": {"hp": 15, "speed": 140.0, "damage": 6, "aggro": 320.0, "range": 52.0, "half_w": 12.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	# Asset wave (2026-11-19): 4 staged multiframe v2 sets + the
+	# PixelLevel slime (CC0), converted by build_wave_enemies.py
+	# (body-matched scaling: body 256px hi-res / 26px px in every
+	# frame, effects may overhang the canvas). Ember is the fast fire
+	# imp, lava-hound the fast bruiser, mushroom-brute the slow
+	# bruiser, diver a ghost (flies like the bat - see _flying),
+	# slime the hopping low-wide one (see _hop_timer).
+	"ember-imp": {"hp": 20, "speed": 100.0, "damage": 8, "aggro": 300.0, "range": 56.0, "half_w": 14.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	"lava-hound": {"hp": 35, "speed": 120.0, "damage": 10, "aggro": 300.0, "range": 60.0, "half_w": 24.0, "half_h": 28.0, "walk": 4, "attack": 4, "wander": true},
+	"mushroom-brute": {"hp": 45, "speed": 55.0, "damage": 12, "aggro": 260.0, "range": 64.0, "half_w": 20.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
+	"sunken-diver-ghost": {"hp": 25, "speed": 85.0, "damage": 8, "aggro": 280.0, "range": 56.0, "half_w": 16.0, "half_h": 32.0, "walk": 3, "attack": 4, "wander": true},
+	"slime": {"hp": 15, "speed": 70.0, "damage": 5, "aggro": 260.0, "range": 48.0, "half_w": 16.0, "half_h": 16.0, "walk": 4, "attack": 4, "wander": true},
 }
 
 var slug := ""
@@ -99,9 +111,13 @@ var _kb_vel := 0.0
 var _flash_timer := 0.0
 var _half_tex_h := 64.0
 var _squash := 0.0
+# Asset wave (2026-11-19): the slime hops while it moves.
+var _hop_timer := 0.0
 var _was_ground := false
 # Phase 9: the cave bat FLIES now (sine hover around its spawn height, no
-# ground collision, no ledge logic). Every other slug stays ground-walking.
+# ground collision, no ledge logic). Asset wave: the sunken-diver-ghost
+# is a ghost, so it flies too (its walk is a swimming motion). Every
+# other slug stays ground-walking.
 var _flying := false
 var _hover_base_y := 0.0
 var _hover_time := 0.0
@@ -121,7 +137,7 @@ func setup(p_slug: String, p_fg: Array, p_player: Node2D, p_main: Node) -> void:
 	half_w = float(st["half_w"])
 	half_h = float(st["half_h"])
 	_wander = bool(st["wander"])
-	_flying = slug == "cave-bat-swarm"
+	_flying = slug in ["cave-bat-swarm", "sunken-diver-ghost"]
 	for i in range(int(st["walk"])):
 		_walk_frames.append(load("res://assets/enemies_px/%s/walk_%d.png" % [slug, i]))
 	for i in range(int(st["attack"])):
@@ -227,6 +243,14 @@ func _physics_process(delta: float) -> void:
 	if on_ground and not _was_ground:
 		_squash = maxf(_squash, 0.7)
 	_was_ground = on_ground
+	# Asset wave (2026-11-19): the slime hops while it moves - a small
+	# periodic jump (~28px, ~1/s) on the ground. vel.y is applied by
+	# next frame's _move_axis; landing reuses the squash above.
+	if slug == "slime" and on_ground and _moving and _kb_timer <= 0.0 and _attack_timer <= 0.0 and _cooldown_timer <= 0.0:
+		_hop_timer -= delta
+		if _hop_timer <= 0.0:
+			vel.y = -320.0
+			_hop_timer = 0.9
 	_update_animation(delta)
 
 func _ai(delta: float) -> void:

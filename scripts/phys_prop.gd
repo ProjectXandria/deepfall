@@ -25,6 +25,16 @@ const KINDS := {
 	"banner": {"hp": 1, "half": Vector2(14, 28), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "banner_red", "scale": 3.4},
 	"column": {"hp": 3, "half": Vector2(18, 32), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "column", "scale": 3.4},
 	"coins": {"hp": 1, "half": Vector2(26, 16), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "coin_stack_small", "scale": 3.4},
+	# Asset wave (2026-11-19): 5 KayKit Dungeon Remastered props, Blender
+	# side-view bakes (bake_props.py, CC0) -> assets/hero/props/wave_*.png.
+	# Same pattern as the chest: 1-3 hits, not pushable, loot in
+	# main.gd prop_broken. Stairs/column/rubble are the heavy stone
+	# ones (3 hits); table is wood (2 hits); spikes/torch are 1 hit.
+	"stairs": {"hp": 3, "half": Vector2(26, 26), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "wave_stairs", "scale": 3.4},
+	"table": {"hp": 2, "half": Vector2(26, 14), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "wave_table", "scale": 3.4},
+	"spikes": {"hp": 1, "half": Vector2(24, 12), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "wave_spikes", "scale": 3.4},
+	"rubble": {"hp": 3, "half": Vector2(26, 12), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "wave_rubble", "scale": 3.4},
+	"torch": {"hp": 1, "half": Vector2(10, 22), "push": false, "friction": 12.0, "bounce": 0.1, "tex": "wave_torch", "scale": 3.4},
 }
 
 var kind := "crate"

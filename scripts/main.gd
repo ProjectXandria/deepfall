@@ -132,7 +132,9 @@ const ORB_IMPACT_EFK := "res://assets/effects-effekseer/mage_orb_impact/mage_orb
 const DEATH_POOF_EFK := "res://assets/effects-effekseer/enemy_death_poof/enemy_death_poof.efkefc"
 const ENEMY_SLUGS := ["cave-bat-swarm", "miner-ghoul", "rock-golem",
 	"cave-spider", "ore-mimic", "tunnel-worm", "skeleton-warrior",
-	"grave-revenant", "ash-wraith", "skeleton-rogue"]
+	"grave-revenant", "ash-wraith", "skeleton-rogue",
+	# Asset wave (2026-11-19): 5 new enemies, 11th-15th.
+	"ember-imp", "lava-hound", "mushroom-brute", "sunken-diver-ghost", "slime"]
 var enemies: Array = []
 var kills := 0
 var _enemies_node: Node2D = null
@@ -1724,6 +1726,10 @@ const STAGED_FX_FRAMES := {
 	"frost-burst": 3, "impact-sparks": 3, "acid-splash": 3,
 	"heal-sparkle": 4, "muzzle-flash": 3, "slash-arc": 4,
 	"void-implosion": 3,
+	# Asset wave (2026-11-19): klad-drawn FX (klad-fx/gen_wave_fx.py),
+	# spawned at the WazHack hooks - trap-trigger on trap spring,
+	# fountain-sparkle / altar-glow / shop-sparkle on feature use.
+	"trap-trigger": 4, "fountain-sparkle": 4, "altar-glow": 4, "shop-sparkle": 4,
 }
 var _staged_fx_cache: Dictionary = {}
 
@@ -2555,6 +2561,9 @@ func _update_framing_clearance() -> void:
 		f["hidden"] = hide
 
 const VARIANT_COUNTS := {"stone": 16, "dirt": 16,
+	# Asset wave (2026-11-19): v4-v7 for the 6 four-variant materials
+	# (build_wave_tiles.py, job 4). Atlas is 16 rows tall, 8 fits.
+	"brick": 8, "mossy-stone": 8, "cracked-stone": 8, "obsidian": 8, "sand": 8, "wood": 8,
 	"trans_rock_N": 1, "trans_rock_E": 1, "trans_rock_S": 1, "trans_rock_W": 1,
 	"trans_dirt_N": 1, "trans_dirt_E": 1, "trans_dirt_S": 1, "trans_dirt_W": 1,
 	"corner_rock_TL": 1, "corner_rock_TR": 1, "corner_rock_BL": 1, "corner_rock_BR": 1,
@@ -4387,6 +4396,17 @@ func _craft_recipe_row(rid: String) -> HBoxContainer:
 	row.add_child(chips)
 	var chip_labels: Array = []
 	for k in (r["cost"] as Dictionary).keys():
+		# Asset wave (2026-11-19): resource icon before the chip text
+		# (assets/items/res_<key>.png, 16x16, build_wave_tiles.py).
+		# Guarded: a cost key with no icon just shows text.
+		var ipath := "res://assets/items/res_%s.png" % k
+		if ResourceLoader.exists(ipath):
+			var ic := TextureRect.new()
+			ic.texture = load(ipath)
+			ic.custom_minimum_size = Vector2(18, 18)
+			ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			chips.add_child(ic)
 		var cl := Label.new()
 		cl.add_theme_font_size_override("font_size", 15)
 		chips.add_child(cl)
@@ -4885,7 +4905,9 @@ func _run_selftest_phase4() -> void:
 		if is_instance_valid(e):
 			e.set_physics_process(false)
 			e.set_process(false)
-	# (a) Staged FX frames load: the three wired kinds, then all 11.
+	# (a) Staged FX frames load: the three wired kinds, then all 15.
+	# Asset wave (2026-11-19): 11 -> 15 kinds, 36 -> 52 frames
+	# (trap-trigger, fountain-sparkle, altar-glow, shop-sparkle, 4 each).
 	var wired := {"ember-burst": 3, "smoke-puff": 4, "spore-puff": 3}
 	for kind in wired.keys():
 		var fr := _staged_frames(kind)
@@ -4899,8 +4921,8 @@ func _run_selftest_phase4() -> void:
 		if fr2.size() > 0:
 			all_kinds += 1
 			all_frames += fr2.size()
-	print("DEEPFALL_SELFTEST_PHASE4 fx all kinds=%d/11 frames=%d (expect 11, 36)" % [all_kinds, all_frames])
-	if all_kinds != 11 or all_frames != 36:
+	print("DEEPFALL_SELFTEST_PHASE4 fx all kinds=%d/15 frames=%d (expect 15, 52)" % [all_kinds, all_frames])
+	if all_kinds != 15 or all_frames != 52:
 		ok = false
 	# (b) Crystal cluster rule (audit §3.3-§3.4): count within budget,
 	# at most one per vein, every cluster in air beside an ore cell,
@@ -6095,7 +6117,7 @@ func _spawn_phys_props() -> void:
 	rng.seed = run_seed + 1111
 	var spawn: Vector2i = data["spawn"]
 	var exit_cell: Vector2i = data["exit"]
-	var kinds := ["crate", "crate", "barrel", "pot", "pot", "chest", "candle", "banner", "column", "coins"]
+	var kinds := ["crate", "crate", "barrel", "pot", "pot", "chest", "candle", "banner", "column", "coins", "stairs", "table", "spikes", "rubble", "torch"]
 	var next_id := 0
 	var skipped := 0
 	var placed_x: Array = []
@@ -6220,6 +6242,49 @@ func prop_broken(pr: Node2D) -> void:
 			else:
 				inv["gold"] += 1
 				msg = "+1 Gold"
+		# Asset wave (2026-11-19): 5 KayKit props. Stairs/rubble are
+		# stone like the column; table is wood; spikes are a stone
+		# trap tile; torch is lit like the candle.
+		"stairs":
+			col = Color(0.6, 0.6, 0.62)
+			if roll < 50:
+				inv["stone"] += 2
+				msg = "+2 Stone"
+			else:
+				inv["gold"] += 1
+				msg = "+1 Gold"
+		"table":
+			if roll < 50:
+				inv["wood"] += 2
+				msg = "+2 Wood"
+			else:
+				inv["wood"] += 1
+				inv["coal"] += 1
+				msg = "+1 Wood, +1 Coal"
+		"spikes":
+			col = Color(0.6, 0.6, 0.62)
+			if roll < 50:
+				inv["stone"] += 1
+				msg = "+1 Stone"
+			else:
+				inv["coal"] += 1
+				msg = "+1 Coal"
+		"rubble":
+			col = Color(0.6, 0.6, 0.62)
+			if roll < 50:
+				inv["stone"] += 2
+				msg = "+2 Stone"
+			else:
+				inv["gold"] += 1
+				msg = "+1 Gold"
+		"torch":
+			col = Color(0.95, 0.75, 0.3)
+			if roll < 60:
+				torches_held += 1
+				msg = "+1 Torch"
+			else:
+				inv["coal"] += 1
+				msg = "+1 Coal"
 	if fx != null:
 		fx.burst(pr.position, col, 22, 420.0, 1500.0, 9.0, 0.9)
 		fx.flyer(pr.position, Color(1.0, 0.85, 0.4), msg)
@@ -8007,7 +8072,11 @@ func _wz_tick(delta: float) -> void:
 		wz.pet_alive = not pet.dead
 	# traps: stepping on a cell triggers it. Inert in test mode —
 	# this whole tick only runs outside test mode.
-	if wz.check_traps(player.cell()):
+	# Asset wave (2026-11-19): trap-trigger FX at the sprung cell
+	# (captured before check_traps, which may teleport the player).
+	var trap_cell: Vector2i = player.cell()
+	if wz.check_traps(trap_cell):
+		_spawn_staged_burst(Vector2(trap_cell) * TILE + Vector2(32, 32), "trap-trigger", 0.6, 0.4)
 		_wz_sync_trap_markers()
 		save_game("trap")
 	_wz_sync_trap_markers()
@@ -8064,15 +8133,21 @@ func _wz_interact() -> void:
 	var feat = wz.feature_near(pc)
 	if feat == null:
 		return
+	# Asset wave (2026-11-19): feature FX at the feature's cell.
+	var fpos: Vector2 = Vector2(feat["cell"]) * TILE + Vector2(32, 32)
 	match String(feat["kind"]):
 		"forge":
 			_wz_open_shop("forge")
+			_spawn_staged_burst(fpos, "shop-sparkle", 0.6, 0.4)
 		"bakery":
 			_wz_open_shop("bakery")
+			_spawn_staged_burst(fpos, "shop-sparkle", 0.6, 0.4)
 		"altar":
 			_wz_open_altar()
+			_spawn_staged_burst(fpos, "altar-glow", 0.6, 0.5)
 		"fountain":
 			_wz_open_fountain()
+			_spawn_staged_burst(fpos, "fountain-sparkle", 0.6, 0.4)
 
 # --- generic feature panel (shops / altar / fountain / talents) ---
 
