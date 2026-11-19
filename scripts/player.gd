@@ -518,9 +518,12 @@ func _platform(cx: int, cy: int) -> bool:
 	return fg[cy][cx] == 7
 
 func _standing_on_platform() -> bool:
-	var cx := int(floor(position.x / TILE))
+	# Playtest fix wave Phase 2: check BOTH feet columns, not just the
+	# centre cell — standing at a platform edge used to miss.
 	var cy := int(floor((position.y + half_h + 1.0) / TILE))
-	return _platform(cx, cy)
+	var cx_left := int(floor((position.x - half_w + 1.0) / TILE))
+	var cx_right := int(floor((position.x + half_w - 1.0) / TILE))
+	return _platform(cx_left, cy) or _platform(cx_right, cy)
 
 # Chunk 2: slope floor. Shape codes match main.gd (1 rise-right,
 # 2 rise-left, 3 half-block, 4 stairs rise-right, 5 stairs rise-left).

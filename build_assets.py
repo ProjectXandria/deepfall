@@ -58,7 +58,36 @@ for name in NAMES:
                 ImageEnhance.Brightness(base.transpose(Image.FLIP_LEFT_RIGHT)
                                         .transpose(Image.FLIP_TOP_BOTTOM)).enhance(0.94)]
     for vi, v in enumerate(variants):
+        # Playtest fix wave Phase 3: wood-platform is a thin one-way
+        # plank (top ~14 px + downward chevron, rest transparent),
+        # not a full block. The staged art is a full block brighter
+        # than solid wood, so it read as a wall. Redrawn here so a
+        # future asset rebuild reproduces the plank instead of
+        # reverting it (same design as build_wave_plank.py).
+        if name == "wood-platform":
+            v = plankify(v, vi)
         v.save(os.path.join(OUT, "tiles2", f"{name}_v{vi}.png"))
+
+def plankify(im, vi):
+    out = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    px = out.load()
+    for y in range(14):
+        for x in range(64):
+            c = (150, 108, 70) if y < 2 else ((110, 74, 48) if y < 11 else (80, 52, 33))
+            px[x, y] = c + (255,)
+    sx = [16, 32, 48, 24][vi % 4]
+    for y in range(2, 14):
+        px[sx, y] = (70, 46, 28, 255)
+        px[sx + 1, y] = (70, 46, 28, 255)
+    for nx in (8, 56) if vi != 3 else (8, 32, 56):
+        for dx in (0, 1):
+            for dy in (0, 1):
+                px[nx + dx, 6 + dy] = (58, 38, 22, 255)
+    for y in range(14, 23):
+        half = 22 - y
+        for x in range(32 - half, 32 + half + 1):
+            px[x, y] = (95, 62, 38, 255)
+    return out
 
 # --- edge / corner / damage overlays (transparent, dark crevice) ---
 def overlay_edge(side):

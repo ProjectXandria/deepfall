@@ -510,6 +510,11 @@ func _ready() -> void:
 	_world_ready = true
 	_hide_loading()
 	var args: PackedStringArray = OS.get_cmdline_user_args()
+	# Playtest fix wave Phase 2: flag test/screenshot runs so the
+	# one-time drop hint never fires in them (see _process).
+	for a0 in args:
+		if a0.begins_with("--selftest") or a0.begins_with("--screenshot") or a0 in ["--soak", "--dump-layers", "--dump-map", "--climb-probe"]:
+			_test_mode = true
 	# Phase 8 class-select flow: a save skips the select (saved class
 	# was applied in _rebuild_world); a new run shows it. Headless
 	# modes pick deterministically instead of waiting on a key press:
@@ -610,6 +615,55 @@ func _ready() -> void:
 	elif "--screenshot" in OS.get_cmdline_user_args():
 		if "--screenshot-c4" in OS.get_cmdline_user_args():
 			await _run_screenshot_c4()
+			get_tree().quit()
+			return
+		if "--screenshot-wave-drop" in OS.get_cmdline_user_args():
+			# Playtest fix wave Phase 2 proof: teleport onto a
+			# one-way platform so the one-time drop hint fires (log
+			# line) and the DROP button + HUD hint are on screen.
+			# Test-mode runs skip the toast, so this branch clears
+			# _test_mode first — it is a visual proof run, not a
+			# selftest, and nothing here asserts on _log_msg.
+			_test_mode = false
+			var pcell := Vector2i(-1, -1)
+			for y in range(5, DeepfallMapGen.H):
+				for x in range(5, DeepfallMapGen.W):
+					if fg[y][x] == 7 and fg[y - 1][x] == 0 and fg[y - 2][x] == 0:
+						pcell = Vector2i(x, y)
+						break
+				if pcell.x >= 0:
+					break
+			if pcell.x >= 0:
+				player.position = Vector2((pcell.x + 0.5) * TILE, (pcell.y - 2.5) * TILE)
+				player.vel = Vector2.ZERO
+			await get_tree().create_timer(1.0).timeout
+			var drop_img := get_viewport().get_texture().get_image()
+			drop_img.save_png("res://screenshot_wave_drop.png")
+			print("DEEPFALL_SCREENSHOT_WAVE_DROP_SAVED platform=%s hint_shown=%s on_platform=%s" % [str(pcell), str(_drop_hint_shown), str(player.call("_standing_on_platform"))])
+			get_tree().quit()
+			return
+		if "--screenshot-wave-slope" in OS.get_cmdline_user_args():
+			# Playtest fix wave Phase 3 proof: mine the first slope
+			# cell three times (Chunk 2 crack stages, then break) and
+			# capture it — the slope art must be gone and the cell
+			# air, with no edge wedge left behind.
+			set_tool("pickaxe")
+			var scell := Vector2i(-1, -1)
+			for c in slopes.keys():
+				scell = c
+				break
+			if scell.x >= 0:
+				_face_cell(scell)
+				_mine_at(scell)
+				_mine_at(scell)
+				_mine_at(scell)
+			var art_after := -1
+			if scell.x >= 0:
+				art_after = _fg_layer_for(scell).get_cell_source_id(scell)
+			await get_tree().create_timer(0.2).timeout
+			var slope_img := get_viewport().get_texture().get_image()
+			slope_img.save_png("res://screenshot_wave_slope.png")
+			print("DEEPFALL_SCREENSHOT_WAVE_SLOPE_SAVED cell=%s slopes_left=%d fg_art=%d (expect 3, -1)" % [str(scell), slopes.size(), art_after])
 			get_tree().quit()
 			return
 		if "--screenshot-craft" in OS.get_cmdline_user_args():
@@ -799,6 +853,10 @@ func _rebuild_world(use_save: bool, staged: bool = false) -> void:
 	_card_pending = 0.0
 	_card_reason = ""
 	player.dead = false
+	# Playtest fix wave Phase 2: the player's grid refs are stale
+	# until the end of this rebuild — the toast hook must not read
+	# them mid-flight (empty fg array = out-of-bounds in _platform).
+	_player_grids_ready = false
 	# staged=true (first start / NEW run) yields between the heavy
 	# phases so the loading screen paints and the phone never sits on
 	# a frozen frame. staged=false (selftest rebuilds) runs fully
@@ -896,6 +954,8 @@ func _rebuild_world(use_save: bool, staged: bool = false) -> void:
 	# propagates to the player without a re-mirror).
 	player.slopes = slopes
 	player.main_node = self
+	# Playtest fix wave Phase 2: grids are live from here on.
+	_player_grids_ready = true
 	_ensure_fx()
 	_spawn_phys_props()
 	# Player must be positioned BEFORE chunk activation, or the first
@@ -994,9 +1054,15 @@ func _apply_save(d: Dictionary) -> void:
 		if c.x >= 0 and c.x < DeepfallMapGen.W and c.y >= 0 and c.y < DeepfallMapGen.H:
 			fg[c.y][c.x] = 0
 			_mined_cells[c] = true
+	# Playtest fix wave Phase 3: _build_polished_chamber re-places
+	# slopes before the save loads, so a mined slope would resurrect
+	# — erase it again here. The render pass runs after _apply_save,
+	# so the cell stays air on load.
+	for c in _mined_cells.keys():
+		slopes.erase(c)
 	for key in d.get("cracked", []):
 		var c2 := _key_to_cell(String(key))
-		if c2.x >= 0 and c2.x < DeepfallMapGen.W and c2.y >= 0 and c2.y < DeepfallMapGen.H and fg[c2.y][c2.x] != 0:
+		if c2.x >= 0 and c2.x < DeepfallMapGen.W and c2.y >= 0 and c2.y < DeepfallMapGen.H and (fg[c2.y][c2.x] != 0 or slopes.has(c2)):
 			mine_damage[c2] = 1
 	# Chunk 2: stage-2 cracks ride in a separate list ("cracked2").
 	# Old saves have no such key — they load exactly as before, all
@@ -1004,7 +1070,7 @@ func _apply_save(d: Dictionary) -> void:
 	# precedent as the Phase 10 "tool" field).
 	for key in d.get("cracked2", []):
 		var c3 := _key_to_cell(String(key))
-		if c3.x >= 0 and c3.x < DeepfallMapGen.W and c3.y >= 0 and c3.y < DeepfallMapGen.H and fg[c3.y][c3.x] != 0:
+		if c3.x >= 0 and c3.x < DeepfallMapGen.W and c3.y >= 0 and c3.y < DeepfallMapGen.H and (fg[c3.y][c3.x] != 0 or slopes.has(c3)):
 			mine_damage[c3] = 2
 	_slain_ids.clear()
 	for sid in d.get("slain", []):
@@ -1181,6 +1247,13 @@ func _create_chunk_layers() -> void:
 		wl.tile_set = _main_tileset
 		wl.z_index = -1
 		wl.name = "WallChunk%d" % i
+		# Playtest fix wave Phase 1: the wall is background, not a
+		# block. It used the same atlas at full brightness (dirt-wall
+		# lum 80.8 vs dirt 99.1 — brighter than foreground stone
+		# 74.1), so mined cells revealed a tile that read as a fresh
+		# block. Dim the whole layer; the deep cave-wall-dark art
+		# already worked, this extends its treatment upward.
+		wl.modulate = Color(0.55, 0.55, 0.6)
 		add_child(wl)
 		_wall_layers.append(wl)
 		var el := TileMapLayer.new()
@@ -2013,11 +2086,15 @@ func _render_chamber() -> void:
 		post.scale = Vector2(128.0 / 766.0, 128.0 / 766.0)
 		post.position = Vector2(sx * TILE + 32, (floor_y - 2) * TILE + 64)
 		post.z_index = 1
+		# Playtest fix wave Phase 3: timber is collisionless decor —
+		# fade it toward the background so it stops reading as a
+		# solid support the player should walk around.
+		post.modulate = Color(0.6, 0.6, 0.65)
 		_add_prop(post, Vector2i(sx, floor_y - 2))
 	var beam := ColorRect.new()
 	beam.size = Vector2(5 * TILE, 12)
 	beam.position = Vector2((midx - 2) * TILE, (floor_y - 3) * TILE + 20)
-	beam.color = Color(0.35, 0.24, 0.12, 1.0)
+	beam.color = Color(0.28, 0.19, 0.10, 1.0)
 	beam.z_index = 1
 	_add_prop(beam, Vector2i(midx, floor_y - 3))
 	# Collapsed-passage debris cluster at the cracked left wall.
@@ -2571,6 +2648,16 @@ func _fill_special(c: Vector2i) -> int:
 # shape picks the direction (rise right/left) or the half/stair form,
 # and the deterministic block hash picks the art variant row (r/r2)
 # where the material has two. Half-blocks are symmetric: one column.
+# Playtest fix wave Phase 3: the fg tile id a slope's material mines
+# into (stone/dirt families map to their block ids; grass counts as
+# grass-dirt, brick/obsidian keep their own ids).
+func _slope_mat_tile(mat: String) -> int:
+	match mat:
+		"dirt": return 1
+		"grass": return 2
+		"brick": return 8
+		"obsidian": return 12
+		_: return 3
 func _slope_atlas_coords(c: Vector2i) -> Vector2i:
 	var s: Dictionary = slopes[c]
 	var shape: int = int(s.get("shape", 0))
@@ -2916,15 +3003,11 @@ func _render_layers_and_edges() -> void:
 						elif e_air:
 							e = 3
 			else:
-				# air cell (a platform counts as air here, like _edge_for_cell)
-				if n_solid and w_solid:
-					e = 4
-				elif n_solid and e_solid:
-					e = 5
-				elif s_solid and w_solid:
-					e = 6
-				elif s_solid and e_solid:
-					e = 7
+				# air cell (a platform counts as air here, like
+				# _edge_for_cell): NO edge art. The old branch painted
+				# inner-corner wedges into air cells — the v1.4
+				# playtest "blocks appear in empty spaces". e stays -1.
+				pass
 			if e < 0:
 				_edge_layers[ci].erase_cell(c)
 			else:
@@ -2983,17 +3066,14 @@ func _edge_for_cell(c: Vector2i) -> int:
 		if left: return 2
 		if right: return 3
 		return -1
-	# Air cell: inner corner where solid boxes it on two sides.
+	# Air cell: NO edge art here. The old inner-corner branch painted
+	# dark corner wedges into air cells boxed in by solid on two
+	# sides — and _mine_at re-derives the 3x3 on every break, so the
+	# just-mined hole gained a wedge that read as a new block (the
+	# v1.4 playtest "blocks appear in empty spaces"). Solid-cell
+	# edges above still draw; air stays empty.
 	if c.x < 0 or c.x >= DeepfallMapGen.W or c.y < 0 or c.y >= DeepfallMapGen.H:
 		return -1
-	var stop := _is_solid_cell(c + Vector2i(0, -1))
-	var sbot := _is_solid_cell(c + Vector2i(0, 1))
-	var sleft := _is_solid_cell(c + Vector2i(-1, 0))
-	var sright := _is_solid_cell(c + Vector2i(1, 0))
-	if stop and sleft: return 4
-	if stop and sright: return 5
-	if sbot and sleft: return 6
-	if sbot and sright: return 7
 	return -1
 
 func _update_edge(c: Vector2i) -> void:
@@ -3026,6 +3106,10 @@ func _render_props() -> void:
 			post.scale = Vector2(128.0 / 766.0, 128.0 / 766.0)
 			post.position = Vector2(px * TILE + 32, (floor_y - 2) * TILE + 64)
 			post.z_index = 1
+			# Playtest fix wave Phase 3: collisionless decor — faded
+			# toward the background (same treatment as the chamber
+			# posts) so it reads as scenery, not a solid structure.
+			post.modulate = Color(0.6, 0.6, 0.65)
 			_add_prop(post, pc)
 			var occ := LightOccluder2D.new()
 			var poly := OccluderPolygon2D.new()
@@ -3051,6 +3135,9 @@ func _render_props() -> void:
 				tres.scale = Vector2(128.0 / 559.0, 128.0 / 559.0)
 				tres.position = Vector2((tx + 0.5) * TILE, floor_y * TILE - 38)
 				tres.z_index = 1
+				# Playtest fix wave Phase 3: collisionless decor —
+				# faded toward the background like the timber posts.
+				tres.modulate = Color(0.6, 0.6, 0.65)
 				_add_prop(tres, tc)
 		# hanging roots from the ceiling, 2 per room, deterministic
 		for k in range(2):
@@ -3245,6 +3332,13 @@ func _process(delta: float) -> void:
 	# Phase 8: while the class-select screen is up the world is frozen
 	# for input (no mining / torch placing); HUD and lights keep running.
 	if not _selecting:
+		# Playtest fix wave Phase 2: one-time drop-through hint. The
+		# log line is the only hint the S25 sees — the desktop hint
+		# line is hidden on touch devices. Fires the first time the
+		# player stands on a one-way platform, then never again.
+		if not _drop_hint_shown and not _test_mode and _player_grids_ready and player != null and bool(player.get("on_ground")) and bool(player.call("_standing_on_platform")):
+			_drop_hint_shown = true
+			log_event("On a platform — hold down + JUMP to drop through")
 		if Input.is_key_pressed(KEY_E) and mine_cooldown <= 0.0:
 			_mine_at(player.cell() + Vector2i(player.facing, 0))
 			mine_cooldown = 0.25
@@ -3362,7 +3456,11 @@ func _process(delta: float) -> void:
 		# (the Phase 9 line plus "Q tool" and the new touch buttons
 		# ran to 1589 px). F5 save / F9 new stay in the README; the
 		# SAVE/NEW buttons are visible on screen.
-		_hud2.text = "A/D move  Space jump  Shift dash  F slam  Mouse aim + hold LMB attack/mine  J attack%s  Q tool  T torch  L lantern  B bench  C craft" % [
+		# Playtest fix wave Phase 2: drop-through ("Down+Jump drop")
+		# joins the hint line. "Mouse aim + hold LMB attack/mine"
+		# shortens to "Aim + hold LMB mine" so the line stays the
+		# same length — Phase 9/10 selftests fail it over 1248 px.
+		_hud2.text = "A/D move  Space jump  Shift dash  F slam  Aim + hold LMB mine  J attack%s  Q tool  T torch  L lantern  B bench  C craft  Down+Jump drop" % [
 			" (orb bolt)" if player.ranged else ""]
 
 func _input(event: InputEvent) -> void:
@@ -3430,6 +3528,61 @@ func _mine_at(cell: Vector2i, via_stick := false) -> void:
 	if cell.x < 0 or cell.x >= DeepfallMapGen.W or cell.y < 0 or cell.y >= DeepfallMapGen.H:
 		return
 	var t: int = fg[cell.y][cell.x]
+	# Playtest fix wave Phase 3: slopes live in AIR cells, so the air
+	# early-return below used to make them unmineable — the v1.4
+	# "mini tiles you can't destroy". A slope mines in 3 hits like
+	# any block (same crack stages, same save). The slope entry is
+	# erased on break and the cell re-derives to air; _apply_save
+	# erases resurrected slopes for already-mined cells on load.
+	if slopes.has(cell):
+		if tool != "pickaxe":
+			if via_stick:
+				_face_cell(cell)
+				player.call("try_attack")
+			else:
+				log_event("Need pickaxe to mine")
+			return
+		player.call("trigger_melee")
+		_face_cell(cell)
+		var smat: int = _slope_mat_tile(String((slopes[cell] as Dictionary).get("mat", "stone")))
+		var spos := Vector2((cell.x + 0.5) * TILE, (cell.y + 0.5) * TILE)
+		if fx != null:
+			fx.burst(spos, _tile_color(smat), 7 if mine_damage.has(cell) else 5, 280.0)
+			fx.shake(2.5)
+			fx.sfx("mine_hit", 0.12)
+		_spawn_staged_burst(spos, "smoke-puff", 0.45, 0.4, Color(0.75, 0.68, 0.55, 0.9))
+		if not mine_damage.has(cell):
+			mine_damage[cell] = 1
+			_damage_layer_for(cell).set_cell(cell, 0, Vector2i(0, 0))
+			save_game("mine")
+			return
+		if mine_damage[cell] == 1:
+			mine_damage[cell] = 2
+			_damage_layer_for(cell).set_cell(cell, 0, Vector2i(1, 0))
+			save_game("mine")
+			return
+		mine_damage.erase(cell)
+		slopes.erase(cell)
+		_damage_layer_for(cell).erase_cell(cell)
+		_mined_cells[cell] = true
+		_fg_layer_for(cell).erase_cell(cell)
+		_edge_layer_for(cell).erase_cell(cell)
+		player.fg = fg
+		_grant_material(smat)
+		if fx != null:
+			fx.burst(spos, _tile_color(smat), 16, 360.0, 1400.0, 8.0)
+			fx.flyer(spos, _tile_color(smat), "+1 %s" % _material_name(smat))
+			fx.shake(4.0)
+			fx.sfx("mine_break", 0.1)
+			fx.rumble(20)
+		_spawn_staged_burst(spos, "smoke-puff", 0.7, 0.5, Color(0.75, 0.68, 0.55, 0.9))
+		for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+				Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]:
+			_set_fill_cell(cell + d)
+			_update_edge(cell + d)
+			_update_overlay(cell + d)
+		save_game("mine")
+		return
 	# Phase 10: mining and attacking are separated by the equipped
 	# tool. Sword cannot mine: E / click shows the log note (never a
 	# silent fail); the right stick swings the sword instead. Air /
@@ -3439,6 +3592,12 @@ func _mine_at(cell: Vector2i, via_stick := false) -> void:
 		if tool == "sword" and via_stick:
 			_face_cell(cell)
 			player.call("try_attack")
+		# Playtest fix wave Phase 3: platforms stay unmineable, but
+		# the pickaxe on one was silent — say why, and how to get
+		# past it. Call sites gate on mine_cooldown, so a held aim
+		# stick repeats the note at most ~4x/sec.
+		if t == 7 and tool == "pickaxe":
+			log_event("Platforms can't be mined — hold down + JUMP to drop through")
 		return
 	if tool != "pickaxe":
 		if via_stick:
@@ -3674,6 +3833,22 @@ var _craft_panel: PanelContainer = null
 var _craft_status: Label = null
 var _craft_buttons: Dictionary = {}
 var _place_buttons: Dictionary = {}
+# Playtest fix wave Phase 4: rebuilt-panel state. Cost chips are
+# per-recipe {"key", "label"} pairs, refreshed with the buttons.
+var _craft_cost_labels: Dictionary = {}
+var _inv_strip: Label = null
+var _bench_caption: Label = null
+var _glass_icon_tex: Texture2D = null
+# Playtest fix wave Phase 2: one-time drop-through hint state.
+# _test_mode is true for selftest / screenshot / soak / dump runs —
+# the toast must never fire there, or log_event would overwrite
+# _log_msg and break a selftest assertion that reads it.
+# _player_grids_ready is false while a rebuild is mid-flight: the
+# player's fg array is empty until _rebuild_world assigns it, and the
+# toast's _standing_on_platform call would index into it.
+var _drop_hint_shown := false
+var _test_mode := false
+var _player_grids_ready := false
 
 func _grant_material(t: int) -> void:
 	# Mining yields, by tile id. Wood-platform (7) is never mined (the
@@ -3913,50 +4088,68 @@ func _pickup_workbench(cell: Vector2i) -> void:
 # --- Phase 7: crafting panel (pauses nothing — the game keeps running) ---
 
 func _build_craft_panel() -> void:
+	# Playtest fix wave Phase 4: rebuilt from one flat column into
+	# sections — header, inventory strip, "Craft (by hand)", a
+	# "Workbench" section with its gating rule shown, and a separate
+	# "Place" section. Recipes and _craft/_can_craft logic are
+	# untouched; only the layout and what it shows changed.
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -280
-	panel.offset_top = -200
-	panel.offset_right = 280
-	panel.offset_bottom = 200
+	panel.offset_left = -320
+	panel.offset_top = -260
+	panel.offset_right = 320
+	panel.offset_bottom = 260
 	panel.visible = false
 	panel.name = "CraftPanel"
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.07, 0.1, 0.96)
+	sb.border_color = Color(1.0, 0.8, 0.4, 0.8)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(14)
+	sb.set_content_margin_all(16)
+	panel.add_theme_stylebox_override("panel", sb)
 	$HUD.add_child(panel)
 	_craft_panel = panel
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
 	panel.add_child(vb)
+	# Header row: title left, Close right.
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	vb.add_child(header)
 	var title := Label.new()
-	title.text = "CRAFTING  (game keeps running — C to close)"
-	title.add_theme_font_size_override("font_size", 20)
-	vb.add_child(title)
-	_craft_status = Label.new()
-	_craft_status.text = "Torch: 1 wood + 1 coal. Lantern needs a workbench nearby."
-	_craft_status.add_theme_font_size_override("font_size", 16)
-	vb.add_child(_craft_status)
-	for rid in ["torch", "glass", "workbench", "lantern"]:
-		var r: Dictionary = RECIPES[rid]
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
-		vb.add_child(row)
-		var lab := Label.new()
-		lab.text = "%s — %s" % [String(r["name"]), String(r["desc"])]
-		lab.add_theme_font_size_override("font_size", 16)
-		lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(lab)
-		var b := Button.new()
-		b.text = "Craft"
-		b.custom_minimum_size = Vector2(90, 36)
-		b.pressed.connect(_craft.bind(rid))
-		row.add_child(b)
-		_craft_buttons[rid] = b
+	title.text = "CRAFTING"
+	title.add_theme_font_size_override("font_size", 22)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close_b := Button.new()
+	close_b.text = "Close (C)"
+	close_b.custom_minimum_size = Vector2(110, 36)
+	close_b.pressed.connect(_show_craft_panel.bind(false))
+	header.add_child(close_b)
+	# Inventory strip: what you hold, so costs are checkable at a glance.
+	_inv_strip = Label.new()
+	_inv_strip.add_theme_font_size_override("font_size", 16)
+	vb.add_child(_inv_strip)
+	# Section 1: hand crafting (no station needed).
+	vb.add_child(_craft_section_header("CRAFT (BY HAND)"))
+	_craft_cost_labels.clear()
+	for rid in ["torch", "glass", "workbench"]:
+		vb.add_child(_craft_recipe_row(rid))
+	# Section 2: workbench station (lantern), with the gating rule shown.
+	vb.add_child(_craft_section_header("WORKBENCH"))
+	_bench_caption = Label.new()
+	_bench_caption.text = "Lantern needs a workbench within 3 tiles — place one with B first."
+	_bench_caption.add_theme_font_size_override("font_size", 14)
+	_bench_caption.add_theme_color_override("font_color", Color(1.0, 0.75, 0.4))
+	vb.add_child(_bench_caption)
+	vb.add_child(_craft_recipe_row("lantern"))
+	# Section 3: placing, visually divided from crafting.
+	vb.add_child(HSeparator.new())
+	vb.add_child(_craft_section_header("PLACE"))
 	var place_row := HBoxContainer.new()
 	place_row.add_theme_constant_override("separation", 10)
 	vb.add_child(place_row)
-	var place_lab := Label.new()
-	place_lab.text = "Place:"
-	place_lab.add_theme_font_size_override("font_size", 16)
-	place_row.add_child(place_lab)
 	for kind in ["torch", "lantern", "workbench"]:
 		var pb := Button.new()
 		pb.text = kind.capitalize()
@@ -3969,16 +4162,87 @@ func _build_craft_panel() -> void:
 			pb.pressed.connect(_place_workbench)
 		place_row.add_child(pb)
 		_place_buttons[kind] = pb
-	var close_b := Button.new()
-	close_b.text = "Close (C)"
-	close_b.custom_minimum_size = Vector2(120, 36)
-	close_b.pressed.connect(_show_craft_panel.bind(false))
-	vb.add_child(close_b)
+	# Status line: the only help/error channel, kept at the bottom.
+	_craft_status = Label.new()
+	_craft_status.text = "Torch: 1 wood + 1 coal. Lantern needs a workbench nearby."
+	_craft_status.add_theme_font_size_override("font_size", 15)
+	vb.add_child(_craft_status)
 	_refresh_craft_panel()
+
+func _craft_section_header(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+	return l
+
+func _craft_recipe_icon(rid: String) -> Texture2D:
+	# Icons reuse existing art: hotbar icons for torch/lantern, the
+	# workbench prop for the bench. Glass has no item art — a small
+	# procedural glass block (pale cyan, white edge + shine).
+	match rid:
+		"torch":
+			return load("res://assets/items/hotbar_torch.png")
+		"lantern":
+			return load("res://assets/items/lantern-64.png")
+		"workbench":
+			return load("res://assets/hero/props/workbench.png")
+		"glass":
+			if _glass_icon_tex == null:
+				var img := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+				for y in range(48):
+					for x in range(48):
+						var c := Color(0.65, 0.85, 0.9, 0.9)
+						if x < 2 or y < 2 or x >= 46 or y >= 46:
+							c = Color(0.95, 1.0, 1.0, 1.0)
+						if (x - y) > 20 and (x - y) < 28:
+							c = Color(1, 1, 1, 0.95)
+						img.set_pixel(x, y, c)
+				_glass_icon_tex = ImageTexture.create_from_image(img)
+			return _glass_icon_tex
+	return null
+
+func _craft_recipe_row(rid: String) -> HBoxContainer:
+	var r: Dictionary = RECIPES[rid]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var icon := TextureRect.new()
+	icon.texture = _craft_recipe_icon(rid)
+	icon.custom_minimum_size = Vector2(48, 48)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	row.add_child(icon)
+	var name_lab := Label.new()
+	name_lab.text = String(r["name"])
+	name_lab.add_theme_font_size_override("font_size", 17)
+	name_lab.custom_minimum_size = Vector2(110, 0)
+	row.add_child(name_lab)
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", 6)
+	chips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(chips)
+	var chip_labels: Array = []
+	for k in (r["cost"] as Dictionary).keys():
+		var cl := Label.new()
+		cl.add_theme_font_size_override("font_size", 15)
+		chips.add_child(cl)
+		chip_labels.append({"key": k, "label": cl})
+	_craft_cost_labels[rid] = chip_labels
+	var b := Button.new()
+	b.text = "Craft"
+	b.custom_minimum_size = Vector2(90, 36)
+	b.pressed.connect(_craft.bind(rid))
+	row.add_child(b)
+	_craft_buttons[rid] = b
+	return row
 
 func _refresh_craft_panel() -> void:
 	if _craft_panel == null:
 		return
+	if _inv_strip != null:
+		_inv_strip.text = "Wood %d · Coal %d · Sand %d · Glass %d · Gold %d · Torch %d" % [
+			int(inv.get("wood", 0)), int(inv.get("coal", 0)), int(inv.get("sand", 0)),
+			int(inv.get("glass", 0)), int(inv.get("gold", 0)), torches_held]
 	for rid in _craft_buttons.keys():
 		var b: Button = _craft_buttons[rid]
 		b.disabled = not _can_craft(rid)
@@ -3986,6 +4250,17 @@ func _refresh_craft_panel() -> void:
 		b.text = "Craft" if _can_craft(rid) else "Craft (need)"
 		if String(r["station"]) == "workbench" and not _near_workbench():
 			b.text = "Craft (bench?)"
+		var chips: Array = _craft_cost_labels.get(rid, [])
+		for entry in chips:
+			var k: String = String(entry["key"])
+			var need: int = int((r["cost"] as Dictionary)[k])
+			var have: int = torches_held if k == "torch" else int(inv.get(k, 0))
+			var cl: Label = entry["label"]
+			cl.text = "%s %d/%d" % [k.capitalize(), have, need]
+			cl.add_theme_color_override("font_color",
+				Color(0.6, 1.0, 0.6) if have >= need else Color(1.0, 0.45, 0.4))
+	if _bench_caption != null:
+		_bench_caption.visible = not _near_workbench()
 	(_place_buttons["torch"] as Button).text = "Torch (%d)" % torches_held
 	(_place_buttons["lantern"] as Button).text = "Lantern (%d)" % int(inv["lantern"])
 	(_place_buttons["workbench"] as Button).text = "Workbench (%d)" % int(inv["workbench"])
@@ -5561,6 +5836,11 @@ func _aim_probe(dir: Vector2) -> Dictionary:
 		if c.x >= 0 and c.x < DeepfallMapGen.W and c.y >= 0 and c.y < DeepfallMapGen.H:
 			var t: int = fg[c.y][c.x]
 			if t != 0 and t != 7:
+				return {"cell": c, "prop": null}
+			# Playtest fix wave Phase 3: slopes live in air cells —
+			# the ray used to pass straight through them. Stop at the
+			# first slope cell so the stick can mine it.
+			if slopes.has(c):
 				return {"cell": c, "prop": null}
 		dist += step
 	return {"cell": Vector2i(-1, -1), "prop": null}

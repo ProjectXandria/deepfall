@@ -11,7 +11,8 @@
 # Buttons (all fully multi-touch, handled here by touch index — the old
 # Godot Buttons only received the FIRST finger through mouse emulation,
 # which is why JUMP / ATK failed while a stick was held):
-#   JUMP (big, bottom-right), DASH and SLAM skills (with cooldown rings),
+#   JUMP (big, bottom-right), DROP (hold + JUMP to fall through
+#     platforms), DASH and SLAM skills (with cooldown rings),
 #   TOOL swap, hotbar (pickaxe / sword / torch / lantern / bench with
 #   counts; tap a tool to equip, tap a placeable to place it), and
 #   CRAFT / SAVE / NEW (NEW asks for a second tap) top-right.
@@ -54,6 +55,8 @@ var _slot_bench: TBtn = null
 var _btn_dash: TBtn = null
 var _btn_slam: TBtn = null
 var _btn_jump: TBtn = null
+var _btn_drop: TBtn = null
+var _drop_held := false
 var settings: Dictionary = {}
 var _stick_r := RADIUS
 var _editing := false
@@ -138,6 +141,12 @@ func _ready() -> void:
 	_btn_jump = _make_btn("JUMP", true, 64.0, _jump_down, _jump_up)
 	_btn_dash = _make_btn("DASH", true, 42.0, func(): player.call("try_dash"), Callable())
 	_btn_slam = _make_btn("SLAM", true, 42.0, func(): player.call("try_slam"), Callable())
+	# Playtest fix wave Phase 2: dedicated DROP button. Drop-through
+	# (stick down + JUMP) shipped with no affordance — the S25 player
+	# had no way to discover the chord. Holding DROP sets touch_drop;
+	# JUMP while held drops through a one-way platform.
+	_btn_drop = _make_btn("DROP", true, 36.0, _drop_down, _drop_up)
+	_btn_drop.name = "DropButton"
 	var tool_b := _make_btn("SWAP", true, 36.0, _tool_down, Callable())
 	tool_b.name = "ToolButton"
 	_slot_pick = _make_slot("res://assets/items/hotbar_pickaxe.png", "1", func(): _set_tool("pickaxe"))
@@ -212,6 +221,7 @@ func _layout() -> void:
 	_place_round(_btn_jump, j)
 	_place_round(_btn_dash, j + Vector2(-158 * mx, 22) * bs)
 	_place_round(_btn_slam, j + Vector2(-118 * mx, -112) * bs)
+	_place_round(_btn_drop, j + Vector2(-260 * mx, -60) * bs)
 	_place_round(get_node("ToolButton") as TBtn, j + Vector2(-8 * mx, -150) * bs)
 	# hotbar: top centre, Terraria-style
 	var slots := [_slot_pick, _slot_sword, _slot_torch, _slot_lantern, _slot_bench]
@@ -374,7 +384,7 @@ func _touch_up(idx: int, _p: Vector2) -> void:
 			_move_active = false
 			player.touch_move = 0.0
 			player.touch_crouch = false
-			player.touch_drop = false
+			player.touch_drop = _drop_held
 			_stick_jump = false
 			_apply_jump()
 		"aim":
@@ -392,7 +402,10 @@ func _update_move() -> void:
 	player.touch_move = 0.0 if ax < DEAD else signf(v.x) * clampf((ax - DEAD) / 0.6, 0.0, 1.0)
 	var vertical := absf(v.y) > absf(v.x) * 1.1
 	player.touch_crouch = vertical and v.y > 0.6
-	player.touch_drop = player.touch_crouch
+	# Playtest fix wave Phase 2: the DROP button holds the same flag
+	# as stick-down — either source drops through a platform, and
+	# releasing the stick must not clear a still-held DROP button.
+	player.touch_drop = player.touch_crouch or _drop_held
 	if vertical and v.y < -0.72:
 		_stick_jump = true
 	elif v.y > -0.4:
@@ -459,6 +472,14 @@ func _jump_down() -> void:
 	# Phase 14: a JUMP-button press is a full jump, even on a tap.
 	player.jump_btn_full = true
 	_apply_jump()
+
+func _drop_down() -> void:
+	_drop_held = true
+	player.touch_drop = true
+
+func _drop_up() -> void:
+	_drop_held = false
+	player.touch_drop = player.touch_crouch
 
 func _jump_up() -> void:
 	_jump_btn_held = false
