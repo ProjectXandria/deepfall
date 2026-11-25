@@ -1,0 +1,16 @@
+=== W4 post-opt gate start Fri Nov 13 14:19:48 UTC 2026 ===
+dump seed=20261101 rc=0 cells=21474 IDENTICAL READY[DEEPFALL_PHASE1_READY seed=20261101 rooms=40/40 ore_veins=138 spawn=(10, 44) exit=(190, 42) connected=true]
+dump seed=20261102 rc=0 cells=21902 IDENTICAL READY[DEEPFALL_PHASE1_READY seed=20261102 rooms=40/40 ore_veins=93 spawn=(10, 16) exit=(189, 41) connected=true]
+dump seed=20261104 rc=0 cells=21354 IDENTICAL READY[DEEPFALL_PHASE1_READY seed=20261104 rooms=40/40 ore_veins=91 spawn=(12, 19) exit=(183, 80) connected=true]
+load1 rc=0 load_ms=1011 errors=0
+load2 rc=0 load_ms=1196 errors=0
+load3 rc=0 load_ms=1209 errors=0
+profile1 rc=0 load_ms=1050 errors=0
+profile2 rc=0 load_ms=1064 errors=0
+profile3 rc=0 load_ms=993 errors=0
+selftest rc=0 errors=0 passfalse=0
+p11-tech rc=0 errors=0 passfalse=0
+p11-red rc=0 errors=0 passfalse=0
+p11-mage rc=0 errors=0 passfalse=0
+selftest-load rc=0 errors=0 passfalse=0
+=== W4 post-opt gate done Fri Nov 13 14:25:18 UTC 2026 FAIL=0 ===

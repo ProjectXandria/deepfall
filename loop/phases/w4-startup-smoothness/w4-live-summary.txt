@@ -1,0 +1,10 @@
+=== W4 live re-gate start Fri Nov 13 14:27:31 UTC 2026 ===
+load1 rc=0 load_ms=1513 errors=0
+load2 rc=0 load_ms=1274 errors=0
+load3 rc=0 load_ms=1009 errors=0
+selftest rc=0 errors=0 passfalse=0
+p11-tech rc=0 errors=0 passfalse=0
+p11-red rc=0 errors=0 passfalse=0
+p11-mage rc=0 errors=0 passfalse=0
+selftest-load rc=0 errors=0 passfalse=0
+=== W4 live re-gate done Fri Nov 13 14:32:59 UTC 2026 FAIL=0 ===
