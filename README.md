@@ -4,36 +4,72 @@ Side-view 2D roguelike dungeon platformer — Terraria-style block
 mining/crafting/construction plus WazHack-style systemic, lethal dungeon
 crawling. Godot 4.8 beta 1, GDScript.
 
-Game Off 2026 entry (theme: SHIFT). Build-and-submit deadline: Dec 1, 2026.
+Game Off 2026 entry (theme: SHIFT). Submission deadline: Dec 1, 2026
+13:37 PST. DEEPFALL is the entry.
 
-## Status
+## Status — v2.1 (2026-11-23)
 
-Merged 2026-11-15 (chunks 1–4, seed 20261101): Forgotten Mines, 200×90 world,
-40 rooms, 138 ore veins, 3 starting classes (tech soldier, red soldier,
-hooded mage) plus an unlockable skeleton hero (scythe, HP 90, melee 18),
-10 enemies, chunk-streamed persistent world, save/reload, crafting,
-3-hit mining with two crack stages, inner corners, slopes / half-blocks /
-stairs, staged particle FX (ember, dust, spore, slash, explosion),
-Effekseer orb (scale 2.0) and death effects, twin-stick touch controls,
-pickaxe/sword tool selection, Terraria hotbar and hearts, WazHack message
-log. Fungal Hollows is groundwork only (stub, no build).
+Live: 200×450 world (seed 20261101), 195 rooms, 653 ore veins, 65 traps,
+~490 foes. Five depth biomes: Shallows (0–30), Fungal Hollows (30–100),
+Crystal Depths (100–230), Ember Deep (230–370), Boss arena (370–450).
+Straight-down dig time, measured: 243.4 s touch / 212.0 s keyboard.
+
+- 3 starting classes (tech soldier, red soldier, hooded mage) plus an
+  unlockable skeleton hero (scythe, HP 90, melee 18, unlocks on first
+  extraction).
+- 15 enemies across the biomes, from cave bats and slimes up top to
+  ember imps, lava hounds, and ash wraiths down deep.
+- Two bosses, one per run, picked at random (seed % 2): the Relic
+  Warden golem and the Quaternius dragon, both 300 HP, fought in a
+  gated 24×10 arena at the bottom (gate seals behind you; re-mineable
+  out, no soft-lock). Both drop amber 3 + gold 2 + stone/coal 2.
+- SHIFT (theme): the world flips between Amber and Void on one button
+  (TAB or on-screen SHIFT, 0.35 s cooldown). 645 gated cells (amber
+  289, void 356): 233 platforms and 411 amber ore veins exist in one
+  world only, and the exit only works in Void.
+- Full inventory panel (36-item catalog): use food and potions, wear
+  rings, place torches, lanterns, and workbenches. Burden system slows
+  you down when your pack gets heavy. Selftest 9/9.
+- WazHack systems 1–8: hunger clock (0.2/s), identification +
+  blessed/cursed loot, traps, shops/altars/fountains, talents, pets,
+  polymorph (rare), 43 rumours. Selftest 18/0.
+- Rock gets harder with depth (fungal 3 hits, crystal 5, ember 6,
+  boss-rock 8); ore bands are depth-banded (gold, then amber).
+- Performance: foe spawns stagger (max 3/frame), autosave on a 15 s
+  dirty-only timer (a crash can lose up to ~15 s), spawn table indexed
+  by chunk, FPS overlay on by default (MENU → SETTINGS, or F8) with a
+  frame graph and chunk-crossing markers.
+- Grey-block fix: base art is frozen at generation (no more
+  neighbour-mask blanks); shaft flat-grey pixels down to 0.
+- Chunk-streamed persistent world, save/reload, crafting, cooking,
+  inner corners, slopes / half-blocks / stairs, staged particle FX
+  (ember, dust, spore, slash, explosion), Effekseer orb (scale 2.0)
+  and death effects (PNG fallbacks on web, where Effekseer has no
+  wasm32 library), Terraria hotbar and hearts, WazHack message log.
+
+Saves: SAVE_VERSION 10. v1.7 saves do NOT carry (v1.7 was version 9);
+v1.8 and later saves do carry.
 
 ## Open
 
-Godot 4.8 beta 1 (editor + Android export templates). Open `project.godot`.
-Android: export preset "Android (Debug)" with a debug keystore.
+Godot 4.8 beta 1 (editor + export templates). Open `project.godot`.
+Export presets: "Android (Debug)" (debug keystore) and "Web"
+(nothreads build, no COOP/COEP headers needed; playable on itch.io).
 
-## Controls (Phase 11)
+## Controls
 
-Touch (floating twin sticks — they appear wherever your thumb lands):
-- Left half: MOVE stick (push down = crouch / drop through platforms, strong up-flick = jump)
-- Right half: AIM stick — attack / mine in any direction you pull (hold to repeat, tap = attack ahead)
-- JUMP (hold for higher jump, double jump), DASH, SLAM, SWAP tool
-- Hotbar (top): pickaxe, sword/staff, torch, lantern, workbench (tap to equip / place)
-- CRAFT, SAVE, NEW (tap twice) top-right
+Touch (on-screen buttons):
+- JUMP (hold for higher jump), DASH, SLAM, DROP, SWAP tool
+- SHIFT to flip Amber/Void, plus USE, CRAFT, INV, SAVE, NEW, MENU,
+  TALENT
+- Hotbar (top): pickaxe, sword/staff, torch, lantern, workbench
+  (tap to equip / place)
+- Hold on a block to mine it, tap a foe to attack
 
-Desktop: A/D move, Space jump, Shift dash, F slam, mouse aim + hold LMB attack/mine,
-J attack, Q / 1 / 2 tools, T torch, L lantern, B bench, C craft, F5 save, F9 new run.
+Desktop: A/D move, Space jump, Shift dash, F slam, mouse aim + hold
+LMB attack/mine, J attack, Q / 1 / 2 tools, T torch, L lantern,
+B bench, C craft, I inventory, TAB shift worlds, F8 FPS overlay,
+Down + jump to drop through a platform, F5 save, F9 new run.
 
 ## Phase 11 (graphics, physics, controls)
 
@@ -110,33 +146,59 @@ Per-wave reports: `loop/phases/w*/REPORT.md`. Digests: `loop/DIGEST-2026-11-13.m
 - Chest prop (1 hit, drops gold/torch). Five more prop sprites staged in `assets/hero/props/`,
   textures only, not wired. In-game sighting of warrior + chest still unverified.
 
+## Later waves (2026-11-19 → 2026-11-23)
+
+- WazHack systems 1–8 + asset wave merged 2026-11-19 (roster 10→15,
+  5 KayKit props, 24 tile variants v4–v7, 9 resource icons, 4 klad FX).
+- Playtest fix wave merged 2026-11-21 (grey blocks, neighbour-mask art,
+  map variance, H 90→140, 4 s hint toast, SAVE_VERSION 9→10).
+- Depth + biomes + boss merged 2026-11-21 (H 140→450, 5 biomes,
+  32 new tiles, both bosses, digtime 243.4 s touch measured).
+- Perf fix merged 2026-11-21 ~18:56 PST (stagger spawns, 15 s autosave,
+  chunk-indexed spawn table, FPS overlay; crossing hitch 62 ms → 0.00 ms
+  on the merged tree, worst walk frame 1233 ms → 343 ms).
+- Shift I merged 2026-11-22 (TAB/button world-flip, 645 gated cells,
+  exit only in Void).
+- Inventory merged (9/9 selftest, 36-item catalog, burden system).
+- Grey-blocks fix merged 2026-11-23 ~21:43 PST on Skit's option-b word
+  (main.gd only; shaft flat-grey px 0, WazHack 18/0, Inventory 9/9,
+  0 script errors).
+- Web export verified 2026-11-24 (scratch-copy export rc=0, played in
+  real Chromium; save persists across reload via IndexedDB) and built
+  from live 2026-11-25 (release export, 9 files, 68,995,917 B;
+  `exports/deepfall-web.zip`, 45,142,564 B, itch-ready).
+
 ## Current build
 
-- v1.2 (code 3): `exports/deepfall-phase1-debug.apk`, 95,793,409 B,
-  sha256 `dc8b73958957232b6005311e49e7a36bb43f28f2cd7b78c24d41280c7cdc1ea0`, apksigner PASS.
-  Uploaded 2026-11-13 ~22:54 PST on Skit's tap; link expires Sun Nov 15 ~23:13 PST.
-  This APK predates the chunk 1–4 merges and the "Phase 1" label fix — it
-  still badges as "DEEPFALL Phase 1" and has the old 2-hit mining.
-- Merged build 2026-11-15 ~22:00 PST (chunks 1+2+8 in live, label "DEEPFALL"):
-  `exports/deepfall-v1.3-debug.apk`, 93,571,915 B,
-  sha256 `2fb3b4f2d5a5bbc6a6d8453a4c9fc4467dad162de2d0fdacbaa62160413ade24`,
-  apksigner v2+v3 PASS, zipalign OK. Selftest + P11 green on live (seed 20261101,
-  rooms 40/40, ore_veins=87). NOT uploaded anywhere — delivery is Skit's call.
-  Superseded 2026-11-15 ~15:16 PST: version bumped and rebuilt (see below).
-- **v1.3 (code 4), rebuilt 2026-11-15 ~15:16 PST** on Skit's tap — `version/name`
-  1.2 → 1.3, `version/code` 3 → 4 in `export_presets.cfg`, no code changes:
-  `exports/deepfall-v1.3-debug.apk`, 93,571,915 B,
-  sha256 `49f2815932229cd64e4711d39b98687007bdba3bfa7ffa31e1a8575bf6182f61`,
-  apksigner v2+v3 PASS, zipalign OK, badging `versionName='1.3' versionCode='4'`.
-  Export rc=0, 0 errors. Uploaded 2026-11-15 ~15:41 PST on Skit's tap:
-  https://muse.ai/files/1409033565616215/4771379009816934/dbz6mtwyyzttltxu21s28lxd/deepfall-v1.3-debug.apk
-  — link expires Mon Nov 17 ~15:33 PST.
-- GitHub now at `529b928a` (v1.3, pushed 2026-11-15 ~16:03 PST on Skit's tap; parent
-  `103f450a` Phase 13) — chunks 1+2+3 merged + chunk 8 in, 2,275 files, APKs kept
-  out of the repo. Game Off entry pick still his (DEEPFALL vs Shiftworlds,
-  deadline Dec 1, 2026 13:37 PST). Orb scale settled at 2.0 (chunk 3 merge, 2026-11-15).
+- **v2.1 (code 12), built 2026-11-23 ~21:43 PST** on Skit's tap —
+  `exports/deepfall-v2.1-debug.apk`, 97,542,534 B,
+  sha256 `90c77dcb…`, apksigner v2+v3 PASS, zipalign OK, same cert as
+  v2.0 (installs over). Web export `exports/deepfall-web.zip`,
+  45,142,564 B, sha256 `93f8939d…`, built 2026-11-25 ~00:06 PST.
+  GitHub main @ v2.1 (pushed 2026-11-25 on Skit's tap).
+- v1.7 (code 8), built 2026-11-19 ~14:54 PST on Skit's tap ("Build v1.7 with
+  the asset wave") — `version/name` 1.6 → 1.7, `version/code` 7 → 8 in
+  `export_presets.cfg`, no other live changes; live = v1.6 code + WazHack 1–8 +
+  asset wave. Verify GREEN (import/selftest/P11 rc=0, rooms 40/40, WazHack 18/0,
+  P11 hp=100 props=77, 0 script errors):
+  `exports/deepfall-v1.7-debug.apk`, 95,992,511 B,
+  sha256 `15ac207368136dd0434a42bcbb84e5d5a384fee306119fec2db15c28224e8ad7`,
+  apksigner v2+v3 PASS, zipalign OK, badging `versionName='1.7' versionCode='8'`.
+  GitHub main was @ `449e3026` (parent `b6785e1d` v1.6), 2,696 files.
 - NOTE on the rename (2026-11-15): `config/name` is now "DEEPFALL", so the
   Android user-data folder moves from `DEEPFALL Phase 1` to `DEEPFALL`.
   Saves from the v1.2 APK will NOT carry over to the renamed build; the
   merged game starts fresh. Save format itself is unchanged (SAVE_VERSION 9,
   plus the new `cracked2` key, which old saves simply lack).
+
+## Open items (Skit's calls)
+
+- Relic spine (WazHack system 9, scoped, NOT built): (a) optional
+  true-win on top of extract (recommended) vs (b) relic as the only win.
+- Ore economy down ~35–45%? 3-hit mining revert? Dig-time floor
+  (accept 4.1 min analytic or push higher)? Biome names/palette review?
+  Boss-rock v0–v6 distinctness? Path overlay art may read as a hole?
+- Fungal Hollows is groundwork only (stub, no build). Lighting/grading
+  scoped (~1 session + S25 eyeball).
+- No license file is set on this repo (jam rules don't require open
+  source; the choice is Skit's).

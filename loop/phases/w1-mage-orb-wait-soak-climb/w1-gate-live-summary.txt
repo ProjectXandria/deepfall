@@ -1,8 +1,0 @@
-=== W1 LIVE re-gate chain start 05:40:17 ===
-selftest rc=0 errors=0
-p11-tech rc=0 errors=0
-p11-red rc=0 errors=0
-p11-mage rc=0 errors=0
-selftest-load rc=0 errors=0
-soak rc=0 errors=0
-=== W1 LIVE re-gate chain done 05:48:52 ===

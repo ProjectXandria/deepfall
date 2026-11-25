@@ -23,7 +23,8 @@ extends CanvasLayer
 
 const SETTINGS_PATH := "user://deepfall_settings.json"
 const DEFAULT_SETTINGS := {"stick_scale": 1.0, "button_scale": 1.0, "opacity": 0.85,
-	"volume": 0.8, "music": 0.6, "vibration": true, "left_handed": false, "offsets": {}}
+	"volume": 0.8, "music": 0.6, "vibration": true, "left_handed": false,
+	"fps_overlay": true, "offsets": {}}
 
 const RADIUS := 72.0
 const DEAD := 0.18
@@ -54,6 +55,7 @@ var _slot_lantern: TBtn = null
 var _slot_bench: TBtn = null
 var _btn_dash: TBtn = null
 var _btn_slam: TBtn = null
+var _btn_shift: TBtn = null
 var _btn_jump: TBtn = null
 var _btn_drop: TBtn = null
 var _drop_held := false
@@ -141,6 +143,9 @@ func _ready() -> void:
 	_btn_jump = _make_btn("JUMP", true, 64.0, _jump_down, _jump_up)
 	_btn_dash = _make_btn("DASH", true, 42.0, func(): player.call("try_dash"), Callable())
 	_btn_slam = _make_btn("SLAM", true, 42.0, func(): player.call("try_slam"), Callable())
+	# Shift I: on-screen SHIFT button (TAB on keyboard). The cooldown
+	# ring is driven from main._shift_cd in the per-frame update below.
+	_btn_shift = _make_btn("SHIFT", true, 42.0, func(): main_node.call("try_shift"), Callable())
 	# Playtest fix wave Phase 2: dedicated DROP button. Drop-through
 	# (stick down + JUMP) shipped with no affordance — the S25 player
 	# had no way to discover the chord. Holding DROP sets touch_drop;
@@ -156,6 +161,11 @@ func _ready() -> void:
 	_slot_bench = _make_slot("res://assets/hero/props/workbench.png", "5", func(): main_node.call("_place_workbench"))
 	var craft_b := _make_btn("CRAFT", false, 0.0, _craft_down, Callable())
 	craft_b.name = "CraftButton"
+	# Inventory chunk: INV opens the standalone inventory panel.
+	# USE (below) is _wz_interact — shops/altar/fountain/tame — and
+	# is NOT an inventory opener.
+	var inv_b := _make_btn("INV", false, 0.0, _inv_down, Callable())
+	inv_b.name = "InvButton"
 	var save_b := _make_btn("SAVE", false, 0.0, _save_down, Callable())
 	save_b.name = "SaveButton"
 	# WazHack wave: USE (shops / altar / fountain / tame, the X key)
@@ -170,6 +180,7 @@ func _ready() -> void:
 	_btn_jump.name = "JumpButton"
 	_btn_dash.name = "DashButton"
 	_btn_slam.name = "SlamButton"
+	_btn_shift.name = "ShiftButton"
 	_btn_jump.accent = Color(0.5, 0.9, 1.0)
 	var slot_names := ["SlotPickaxe", "SlotSword", "SlotTorch", "SlotLantern", "SlotBench"]
 	var slot_nodes := [_slot_pick, _slot_sword, _slot_torch, _slot_lantern, _slot_bench]
@@ -195,7 +206,7 @@ func _make_btn(text: String, rnd: bool, r: float, press: Callable, release: Call
 	if rnd:
 		b.size = Vector2(r * 2.0, r * 2.0)
 	else:
-		b.size = Vector2(88, 46)
+		b.size = Vector2(80, 46)
 	b.set_meta("base_r", r)
 	b.set_meta("base_size", b.size)
 	add_child(b)
@@ -228,6 +239,7 @@ func _layout() -> void:
 	_place_round(_btn_jump, j)
 	_place_round(_btn_dash, j + Vector2(-158 * mx, 22) * bs)
 	_place_round(_btn_slam, j + Vector2(-118 * mx, -112) * bs)
+	_place_round(_btn_shift, j + Vector2(-200 * mx, -200) * bs)
 	_place_round(_btn_drop, j + Vector2(-260 * mx, -60) * bs)
 	_place_round(get_node("ToolButton") as TBtn, j + Vector2(-8 * mx, -150) * bs)
 	# hotbar: top centre, Terraria-style
@@ -235,7 +247,7 @@ func _layout() -> void:
 	var sw: float = (slots[0] as TBtn).size.x
 	var total := slots.size() * sw + (slots.size() - 1) * 8
 	var rw: float = (get_node("CraftButton") as TBtn).size.x + 8
-	var right_btns := ["MenuButton", "CraftButton", "SaveButton", "NewButton", "UseButton", "TalentButton"]
+	var right_btns := ["MenuButton", "CraftButton", "InvButton", "SaveButton", "NewButton", "UseButton", "TalentButton"]
 	# centred, but never under the right-hand menu buttons (wide buttons
 	# / narrow screens) and never over the hearts on the left
 	var right_start := W - right_btns.size() * rw - 4
@@ -282,6 +294,9 @@ func _blocked(p: Vector2) -> bool:
 		return true
 	var cp: Control = main_node.get("_craft_panel")
 	if cp != null and cp.visible and cp.get_global_rect().has_point(p):
+		return true
+	var ip: Control = main_node.get("_inv_panel")
+	if ip != null and ip.visible and ip.get_global_rect().has_point(p):
 		return true
 	return false
 
@@ -429,6 +444,14 @@ func _process(delta: float) -> void:
 		if _btn_new.label != want:
 			_btn_new.label = want
 			_btn_new.queue_redraw()
+		# Playtest fix wave 2: the armed state must be unmissable —
+		# red tint while SURE? is live, so the two-tap NEW (first tap
+		# arms for 2 s, second confirms) reads at a glance. The
+		# first tap also logs "Tap NEW again to start a fresh run",
+		# which now auto-dismisses instead of sticking (toast fix).
+		var want_mod := Color(1.0, 0.45, 0.45, 1.0) if _new_confirm > 0.0 else Color(1, 1, 1, 1)
+		if _btn_new.modulate != want_mod:
+			_btn_new.modulate = want_mod
 	var sel: bool = bool(main_node.get("_selecting"))
 	for b in _buttons:
 		(b as TBtn).visible = not sel and not bool(main_node.get("_card_open")) and not (_settings_panel != null and _settings_panel.visible)
@@ -444,11 +467,12 @@ func _process(delta: float) -> void:
 	if player != null:
 		_btn_dash.cooldown = float(player.get("dash_cooldown")) / 0.75
 		_btn_slam.cooldown = float(player.get("slam_cooldown")) / 1.4
+		_btn_shift.cooldown = clampf(float(main_node.get("_shift_cd")) / 0.35, 0.0, 1.0)
 	var inv: Dictionary = main_node.get("inv")
 	_slot_torch.count = int(main_node.get("torches_held"))
 	_slot_lantern.count = int(inv.get("lantern", 0))
 	_slot_bench.count = int(inv.get("workbench", 0))
-	for b in [_btn_dash, _btn_slam, _slot_torch, _slot_lantern, _slot_bench]:
+	for b in [_btn_dash, _btn_slam, _btn_shift, _slot_torch, _slot_lantern, _slot_bench]:
 		(b as TBtn).queue_redraw()
 	_overlay.queue_redraw()
 
@@ -507,6 +531,9 @@ func _torch_down() -> void:
 
 func _craft_down() -> void:
 	main_node.call("_toggle_craft_panel")
+
+func _inv_down() -> void:
+	main_node.call("_toggle_inventory_panel")
 
 func _use_down() -> void:
 	main_node.call("_wz_interact")
@@ -581,6 +608,12 @@ func _build_settings_panel() -> void:
 	_add_slider(vb, "music", "Cave ambience", 0.0, 1.0)
 	_add_check(vb, "vibration", "Vibration on hits")
 	_add_check(vb, "left_handed", "Left-handed (swap sides)")
+	# Perf fix: FPS overlay toggle (default ON). The top button row
+	# is at capacity at 7 buttons (MENU/CRAFT/INV/SAVE/NEW/USE/
+	# TALENT) — the 80 px button width is what keeps the hotbar
+	# clear of the hearts at default scale — so the toggle lives
+	# here, plus F8 on desktop.
+	_add_check(vb, "fps_overlay", "FPS overlay (frame graph)")
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -658,6 +691,16 @@ func _on_setting(key: String, v) -> void:
 		fxn.call("sfx", "pickup")
 	if key == "vibration" and bool(v) and fxn != null:
 		fxn.call("rumble", 60)
+	if key == "fps_overlay":
+		main_node.call("set_fps_overlay", bool(v))
+
+func _set_fps_overlay_setting(on: bool) -> void:
+	# Called by main.toggle_fps_overlay (F8) so the checkbox shows the
+	# real state. set_pressed_no_signal: no toggled loop back to main.
+	settings["fps_overlay"] = on
+	if _checks.has("fps_overlay"):
+		(_checks["fps_overlay"] as CheckButton).set_pressed_no_signal(on)
+	_save_settings()
 
 func _open_settings() -> void:
 	_release_all()

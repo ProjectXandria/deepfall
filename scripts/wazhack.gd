@@ -119,6 +119,14 @@ var rumours: Array = []
 var visited_features: Dictionary = {}
 var _restored: bool = false
 var _rooms: Array = []
+# Depth-biomes chunk: room indices intersecting the boss arena/shaft.
+# No traps, shops or pet den roll in them (main.gd passes the list
+# from the gen dict). room_index() still uses the full array, so
+# indices never shift.
+var _arena_indices: Array = []
+# Depth-biomes chunk: the spawn room's index (shallowest room, not
+# rooms[0]). No traps/shops/pet den roll in it either.
+var _spawn_idx: int = 0
 
 func setup(p_main, p_inv: Dictionary, p_seed: int) -> void:
 	main = p_main
@@ -187,15 +195,19 @@ func rumour_counts() -> Dictionary:
 
 # --- world build: fresh roll, or restore from save ---
 
-func on_world_built(rooms: Array) -> void:
+func on_world_built(rooms: Array, arena_indices: Array = [], spawn_idx: int = 0) -> void:
 	_rooms = rooms
+	_arena_indices = arena_indices
+	_spawn_idx = spawn_idx
 	if _restored:
 		_restored = false
 		return
-	new_run(rooms)
+	new_run(rooms, arena_indices, spawn_idx)
 
-func new_run(rooms: Array) -> void:
+func new_run(rooms: Array, arena_indices: Array = [], spawn_idx: int = 0) -> void:
 	_rooms = rooms
+	_arena_indices = arena_indices
+	_spawn_idx = spawn_idx
 	rng.seed = seed * 1000003 + 77
 	_roll_identification()
 	hunger = HUNGER_MAX
@@ -237,7 +249,11 @@ func new_run(rooms: Array) -> void:
 func _pick_room(rooms: Array) -> int:
 	if rooms.size() <= 2:
 		return 0
-	return rng.randi_range(1, rooms.size() - 2)
+	for _t in range(8):
+		var _idx := rng.randi_range(0, rooms.size() - 2)
+		if _idx != _spawn_idx and not (_idx in _arena_indices):
+			return _idx
+	return 1 if _spawn_idx != 1 else 2
 
 func _room_floor_cell(rooms: Array, idx: int, avoid: Array = []) -> Vector2i:
 	if idx < 0 or idx >= rooms.size():
@@ -272,6 +288,8 @@ func _roll_traps(rooms: Array) -> void:
 	var count: int = rooms.size() / 3
 	var idxs: Array = []
 	for i in range(1, rooms.size() - 1):
+		if i in _arena_indices or i == _spawn_idx:
+			continue
 		idxs.append(i)
 	_shuffle(idxs)
 	for n in range(mini(count, idxs.size())):
@@ -284,6 +302,8 @@ func _roll_traps(rooms: Array) -> void:
 func _roll_shops(rooms: Array) -> void:
 	var idxs: Array = []
 	for i in range(1, rooms.size() - 1):
+		if i in _arena_indices or i == _spawn_idx:
+			continue
 		idxs.append(i)
 	_shuffle(idxs)
 	if idxs.size() < 3:

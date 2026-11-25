@@ -12,6 +12,9 @@ const GRAVITY := 1700.0
 var frames: Array = []
 var vel := Vector2.ZERO
 var main_node: Node = null
+# Shift I: the world this mover collides in (see player.gd).
+var world: int = DeepfallMapGen.MASK_AMBER
+var world_mask: Array = []
 var half_h := 32.0
 var _sprite: Sprite2D
 var _t := 0.0
@@ -31,13 +34,31 @@ func setup(slug: String, p_main: Node, facing: int, p_vel: Vector2, p_half_h: fl
 	add_child(_sprite)
 	z_index = 2
 
+# Shift I: refresh the cached world from main, once per physics
+# frame (see player.gd).
+func _refresh_world() -> void:
+	if main_node == null:
+		return
+	world = int(main_node.get("current_world"))
+	var wm: Variant = main_node.get("world_mask")
+	if wm is Array:
+		world_mask = wm
+
 func _solid(cx: int, cy: int) -> bool:
 	if main_node == null or cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = main_node.fg[cy][cx]
-	return t != 0
+	if t == 0:
+		return false
+	# Shift I: a ghost cell is not solid in this world. Platforms
+	# (tile 7) still count as solid for corpses, as before.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _physics_process(delta: float) -> void:
+	_refresh_world()
 	_t += delta
 	var idx := mini(frames.size() - 1, int(_t * FPS))
 	_sprite.texture = frames[idx]

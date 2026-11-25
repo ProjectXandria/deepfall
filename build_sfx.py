@@ -77,6 +77,10 @@ def main():
     write("prop_break", synth(0.28, lambda t, d: (0.7 * math.sin(2 * math.pi * 230 * t) * env(t, 0.08, 0.001, 2) + nz(0.45) * env(t, d, 0.002, 1.8))), 0.8)
     # enemy death: falling square + noise puff
     write("enemy_die", synth(0.35, lambda t, d: (0.5 * sq((260 - 500 * t) * t) * env(t, d, 0.003, 1.4) + 0.4 * nz(0.3) * env(t, d, 0.002, 2))), 0.7)
+    # Shift I: world shift blip — two-note sine rising 520 -> 780 Hz
+    write("shift", synth(0.16, lambda t, d: math.sin(2 * math.pi * (520 if t < 0.07 else 780) * t) * 0.5 * env(t, d, 0.003, 1.3)), 0.5)
+    # Shift I: refused shift — dull low buzz, 110 Hz square, fast decay
+    write("blocked", synth(0.18, lambda t, d: sq(110 * t) * 0.4 * env(t, d, 0.003, 1.0)), 0.55)
     print("sfx written to", OUT)
 
 

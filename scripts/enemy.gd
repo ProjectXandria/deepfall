@@ -68,6 +68,15 @@ const STATS := {
 	"mushroom-brute": {"hp": 45, "speed": 55.0, "damage": 12, "aggro": 260.0, "range": 64.0, "half_w": 20.0, "half_h": 32.0, "walk": 4, "attack": 4, "wander": true},
 	"sunken-diver-ghost": {"hp": 25, "speed": 85.0, "damage": 8, "aggro": 280.0, "range": 56.0, "half_w": 16.0, "half_h": 32.0, "walk": 3, "attack": 4, "wander": true},
 	"slime": {"hp": 15, "speed": 70.0, "damage": 5, "aggro": 260.0, "range": 48.0, "half_w": 16.0, "half_h": 16.0, "walk": 4, "attack": 4, "wander": true},
+	# Boss chunk (2026-11-21): the arena boss, one per run, picked by
+	# seed (see main.gd BOSS_SLUGS / _boss_pick). NOT in ENEMY_SLUGS
+	# / BIOME_FOES — never a random table spawn, only the arena
+	# trigger spawns them. "scale" is an extra sprite multiplier on
+	# top of PX_SCALE (bosses read bigger than mobs); half_w/half_h
+	# stay the collision box. The dragon flies (bat/ghost precedent);
+	# the Warden is a slow ground bruiser.
+	"relic-warden": {"hp": 300, "speed": 40.0, "damage": 18, "aggro": 900.0, "range": 80.0, "half_w": 30.0, "half_h": 56.0, "walk": 4, "attack": 4, "wander": false, "scale": 1.75},
+	"quaternius-dragon": {"hp": 300, "speed": 75.0, "damage": 16, "aggro": 900.0, "range": 88.0, "half_w": 44.0, "half_h": 48.0, "walk": 4, "attack": 4, "wander": false, "scale": 2.0},
 }
 
 var slug := ""
@@ -75,6 +84,9 @@ var spawn_id := -1
 var fg: Array = []
 var player: Node2D = null
 var main_node: Node = null
+# Shift I: the world this mover collides in (see player.gd).
+var world: int = DeepfallMapGen.MASK_AMBER
+var world_mask: Array = []
 
 var hp := 10
 var max_hp := 10
@@ -137,7 +149,7 @@ func setup(p_slug: String, p_fg: Array, p_player: Node2D, p_main: Node) -> void:
 	half_w = float(st["half_w"])
 	half_h = float(st["half_h"])
 	_wander = bool(st["wander"])
-	_flying = slug in ["cave-bat-swarm", "sunken-diver-ghost"]
+	_flying = slug in ["cave-bat-swarm", "sunken-diver-ghost", "quaternius-dragon"]
 	for i in range(int(st["walk"])):
 		_walk_frames.append(load("res://assets/enemies_px/%s/walk_%d.png" % [slug, i]))
 	for i in range(int(st["attack"])):
@@ -146,8 +158,10 @@ func setup(p_slug: String, p_fg: Array, p_player: Node2D, p_main: Node) -> void:
 	# same pixel density as the hero. Feet on the canvas bottom row.
 	_idle_frame = load("res://assets/enemies_px/%s/idle.png" % slug)
 	_sprite = Sprite2D.new()
-	_sprite.scale = Vector2(PX_SCALE, PX_SCALE)
-	_half_tex_h = _idle_frame.get_height() * PX_SCALE * 0.5
+	# Boss chunk: optional per-slug sprite scale on top of PX_SCALE.
+	var sc: float = float(st.get("scale", 1.0))
+	_sprite.scale = Vector2(PX_SCALE * sc, PX_SCALE * sc)
+	_half_tex_h = _idle_frame.get_height() * PX_SCALE * sc * 0.5
 	_sprite.position = Vector2(0, half_h - _half_tex_h)
 	_sprite.texture = _idle_frame
 	add_child(_sprite)
@@ -190,6 +204,7 @@ func _die() -> void:
 	queue_free()
 
 func _physics_process(delta: float) -> void:
+	_refresh_world()
 	if dead:
 		return
 	_hurt_timer = max(0.0, _hurt_timer - delta)
@@ -390,16 +405,38 @@ func _update_animation(delta: float) -> void:
 		lean = signf(vel.x) * 0.15
 	_sprite.rotation = lerpf(_sprite.rotation, lean, minf(1.0, 12.0 * delta))
 
+# Shift I: refresh the cached world from main, once per physics
+# frame (see player.gd).
+func _refresh_world() -> void:
+	if main_node == null:
+		return
+	world = int(main_node.get("current_world"))
+	var wm: Variant = main_node.get("world_mask")
+	if wm is Array:
+		world_mask = wm
+
 func _solid(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = fg[cy][cx]
-	return t != 0 and t != 7
+	if t == 0 or t == 7:
+		return false
+	# Shift I: a ghost cell is not solid in this world.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _platform(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
-	return fg[cy][cx] == 7
+	if fg[cy][cx] != 7:
+		return false
+	# Shift I: a gated platform is standable only in its world.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _move_axis(delta: float, x_axis: bool) -> void:
 	if x_axis:

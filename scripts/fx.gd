@@ -65,7 +65,7 @@ func _ready() -> void:
 		add_child(ap2)
 		ap2.play()
 		_amb[n] = ap2
-	for n in ["swing", "mine_hit", "mine_break", "hit", "hurt", "jump", "land", "dash", "slam", "pickup", "prop_break", "enemy_die"]:
+	for n in ["swing", "mine_hit", "mine_break", "hit", "hurt", "jump", "land", "dash", "slam", "pickup", "prop_break", "enemy_die", "shift", "blocked"]:
 		_streams[n] = load("res://assets/sfx/%s.wav" % n)
 	for i in range(10):
 		var ap := AudioStreamPlayer.new()

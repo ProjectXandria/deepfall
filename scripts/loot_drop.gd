@@ -14,6 +14,9 @@ var item := "stone"
 var amount := 1
 var vel := Vector2.ZERO
 var main_node: Node = null
+# Shift I: the world this mover collides in (see player.gd).
+var world: int = DeepfallMapGen.MASK_AMBER
+var world_mask: Array = []
 var _t := 0.0
 var _sprite: Sprite2D
 var _resting := false
@@ -30,20 +33,43 @@ func setup(p_item: String, n: int, p_main: Node) -> void:
 	add_child(_sprite)
 	z_index = 4
 
+# Shift I: refresh the cached world from main, once per physics
+# frame (see player.gd).
+func _refresh_world() -> void:
+	if main_node == null:
+		return
+	world = int(main_node.get("current_world"))
+	var wm: Variant = main_node.get("world_mask")
+	if wm is Array:
+		world_mask = wm
+
 func _solid(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = main_node.fg[cy][cx]
-	return t != 0 and t != 7
+	if t == 0 or t == 7:
+		return false
+	# Shift I: a ghost cell is not solid in this world.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _platform(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
-	return main_node.fg[cy][cx] == 7
+	if main_node.fg[cy][cx] != 7:
+		return false
+	# Shift I: a gated platform is standable only in its world.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _physics_process(delta: float) -> void:
 	if collected or main_node == null:
 		return
+	_refresh_world()
 	_t += delta
 	var pl: Node2D = main_node.get("player")
 	var to: Vector2 = (pl.position + Vector2(0, -6)) - position

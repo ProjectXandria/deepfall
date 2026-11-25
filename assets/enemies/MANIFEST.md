@@ -32,6 +32,8 @@ nothing in staging was modified). Rebuild: `build_phase5_assets.py` in the game 
 | grave-revenant | 289x256 | 4 | multiframe/grave-revenant-walk-v2 (0–3) | 4 | multiframe/grave-revenant-attack-v2 (0–3) | enemies/ember-hollow/full/grave-revenant.png |
 | ash-wraith | 373x256 | 4 | multiframe/ash-wraith-walk-v2 (0–3) | 4 | multiframe/ash-wraith-attack-redo (0–3) | enemies/ember-hollow/full/ash-wraith.png |
 | skeleton-rogue | 191x256 | 4 | KayKit bake (see note) | 4 | KayKit bake (see note) | KayKit bake (see note) |
+| relic-warden | 231x256 | 4 | procedural (build_boss_warden.py) | 4 | procedural (build_boss_warden.py) | procedural (build_boss_warden.py) |
+| quaternius-dragon | 300x256 | 4 | Quaternius bake (bake_dragon.py) | 4 | Quaternius bake (bake_dragon.py) | Quaternius bake (bake_dragon.py) |
 
 Scales applied (walk / attack / idle): bat 1.000 / 0.341 / 0.610;
 ghoul 1.053 / 0.324 / 0.560; golem 0.992 / 0.433 / 0.554;

@@ -86,6 +86,11 @@ var fg: Array = []
 # feet to their heightfield floor instead of blocking like a wall.
 var slopes: Dictionary = {}
 var main_node: Node = null
+# Shift I: the world this mover collides in, refreshed once per
+# physics frame from main (try_shift pushes it immediately for the
+# player). Empty world_mask = pre-first-frame fallback: grid truth.
+var world: int = DeepfallMapGen.MASK_AMBER
+var world_mask: Array = []
 var vel := Vector2.ZERO
 var facing := 1
 var coyote_timer := 0.0
@@ -360,6 +365,7 @@ func _fx_burst(pos: Vector2, col: Color, n: int, spd: float) -> void:
 		fx.burst(pos, col, n, spd, 900.0, 5.0, 0.45, 0.9)
 
 func _physics_process(delta: float) -> void:
+	_refresh_world()
 	if dead:
 		if _dying_timer > 0.0:
 			_dying_timer = max(0.0, _dying_timer - delta)
@@ -515,16 +521,41 @@ func _animate(delta: float, move: float) -> void:
 		_cam_look = _cam_look.lerp(look, 1.0 - exp(-4.0 * delta))
 		cam.offset = _cam_look + shake
 
+# Shift I: refresh the cached world from main, once per physics
+# frame. try_shift pushes it immediately for the player so no frame
+# collides in the old world.
+func _refresh_world() -> void:
+	if main_node == null:
+		return
+	world = int(main_node.get("current_world"))
+	var wm: Variant = main_node.get("world_mask")
+	if wm is Array:
+		world_mask = wm
+
 func _solid(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = fg[cy][cx]
-	return t != 0 and t != 7
+	if t == 0 or t == 7:
+		return false
+	# Shift I: a ghost cell is not solid in this world. Empty
+	# world_mask (before the first physics frame) falls back to
+	# grid truth.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _platform(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
-	return fg[cy][cx] == 7
+	if fg[cy][cx] != 7:
+		return false
+	# Shift I: a gated platform is standable only in its world.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _standing_on_platform() -> bool:
 	# Playtest fix wave Phase 2: check BOTH feet columns, not just the

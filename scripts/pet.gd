@@ -20,6 +20,9 @@ const WALK_SPEED := 200.0
 var main_node: Node = null
 var fg: Array = []
 var player: Node2D = null
+# Shift I: the world this mover collides in (see player.gd).
+var world: int = DeepfallMapGen.MASK_AMBER
+var world_mask: Array = []
 var hp := 30
 var max_hp := 30
 var dead := false
@@ -74,6 +77,7 @@ func take_hit(dmg: int, from_x: float) -> void:
 			main_node.wz.pet_died()
 
 func _physics_process(delta: float) -> void:
+	_refresh_world()
 	if dead or player == null:
 		return
 	_anim_time += delta
@@ -138,16 +142,38 @@ func _nearest_foe():
 			best = e
 	return best
 
+# Shift I: refresh the cached world from main, once per physics
+# frame (see player.gd).
+func _refresh_world() -> void:
+	if main_node == null:
+		return
+	world = int(main_node.get("current_world"))
+	var wm: Variant = main_node.get("world_mask")
+	if wm is Array:
+		world_mask = wm
+
 func _solid(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return true
 	var t: int = fg[cy][cx]
-	return t != 0 and t != 7
+	if t == 0 or t == 7:
+		return false
+	# Shift I: a ghost cell is not solid in this world.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _platform(cx: int, cy: int) -> bool:
 	if cx < 0 or cx >= DeepfallMapGen.W or cy < 0 or cy >= DeepfallMapGen.H:
 		return false
-	return fg[cy][cx] == 7
+	if fg[cy][cx] != 7:
+		return false
+	# Shift I: a gated platform is standable only in its world.
+	if world_mask.is_empty():
+		return true
+	var m: int = world_mask[cy][cx]
+	return m == DeepfallMapGen.MASK_BOTH or m == world
 
 func _move_axis(delta: float, x_axis: bool) -> void:
 	if x_axis:
